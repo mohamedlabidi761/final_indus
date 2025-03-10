@@ -1,0 +1,19 @@
+:root {
+  --industrial-blue: #2c3e50;
+  --dark-gray: #34495e;
+  --light-gray: #ecf0f1;
+  --white: #ffffff;
+  --green: #2ecc71;
+  --red: #e74c3c;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  background-color: var(--light-gray);
+  color: var(--industrial-blue);
+}
+
+.industrial-bg {
+  background-color: var(--industrial-blue);
+  color: var(--white);
+} 

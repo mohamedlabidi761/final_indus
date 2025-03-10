@@ -1,0 +1,52 @@
+.machine-status-card {
+  margin-bottom: 20px;
+}
+
+.machine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.machine-item {
+  padding: 10px;
+  border-radius: 4px;
+  background-color: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.machine-item.warning {
+  animation: pulseWarning 1.5s infinite;
+}
+
+.machine-item.critical {
+  animation: blinkCritical 1s infinite;
+}
+
+.machine-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.machine-name {
+  font-weight: 500;
+}
+
+.machine-alert {
+  margin-top: 5px;
+  font-size: 0.9em;
+  color: var(--dark-gray);
+}
+
+@keyframes pulseWarning {
+  0% { background-color: rgba(255, 193, 7, 0.1); }
+  50% { background-color: rgba(255, 193, 7, 0.3); }
+  100% { background-color: rgba(255, 193, 7, 0.1); }
+}
+
+@keyframes blinkCritical {
+  0% { background-color: rgba(220, 53, 69, 0.1); }
+  50% { background-color: rgba(220, 53, 69, 0.3); }
+  100% { background-color: rgba(220, 53, 69, 0.1); }
+} 

@@ -1,0 +1,465 @@
+:root {
+  --industrial-gray: #4a5568;
+  --industrial-gray-light: #718096;
+  --industrial-gray-dark: #2d3748;
+  --safety-yellow: #ecc94b;
+  --safety-yellow-dark: #d69e2e;
+  --success-green: #48bb78;
+  --warning-orange: #ed8936;
+  --danger-red: #e53e3e;
+  --info-blue: #4299e1;
+}
+
+.admin-management-container {
+  padding: var(--content-padding);
+  background-color: var(--light-color);
+  min-height: 100vh;
+}
+
+/* Page Header */
+.admin-management-container .page-title {
+  margin-bottom: 0.5rem;
+  color: var(--industrial-gray-dark);
+  font-weight: 700;
+}
+
+.admin-management-container .timestamp {
+  color: var(--industrial-gray-light);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+/* Tabs */
+.admin-management-container .nav-tabs {
+  border-bottom: 2px solid var(--industrial-gray-light);
+}
+
+.admin-management-container .nav-tabs .nav-link {
+  color: var(--industrial-gray);
+  font-weight: 600;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  margin-right: 0.5rem;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.admin-management-container .nav-tabs .nav-link:hover {
+  color: var(--industrial-gray-dark);
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.admin-management-container .nav-tabs .nav-link.active {
+  color: var(--industrial-gray-dark);
+  background-color: transparent;
+  border-bottom: 3px solid var(--safety-yellow);
+  margin-bottom: -2px;
+}
+
+/* Section Cards */
+.section-card {
+  border: none;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+  border-radius: var(--border-radius);
+}
+
+.section-card .card-header {
+  background-color: var(--white);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 1rem 1.5rem;
+}
+
+.section-card .card-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--industrial-gray-dark);
+}
+
+.section-card .card-body {
+  padding: 1.5rem;
+}
+
+/* Buttons */
+.add-btn {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-btn svg {
+  font-size: 0.9rem;
+}
+
+.export-btn {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.export-btn svg {
+  font-size: 0.9rem;
+}
+
+.action-btn {
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.5rem;
+}
+
+.action-btn:last-child {
+  margin-right: 0;
+}
+
+/* Tables */
+.table-responsive {
+  overflow-x: auto;
+  border-radius: var(--border-radius);
+}
+
+.machines-table, .workers-table {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.machines-table th, .workers-table th {
+  background-color: rgba(0, 0, 0, 0.02);
+  color: var(--industrial-gray-dark);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-top: none;
+}
+
+.machines-table td, .workers-table td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sort-icon {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.actions-cell {
+  white-space: nowrap;
+  width: 1%;
+}
+
+/* Status Badges */
+.badge {
+  font-weight: 500;
+  padding: 0.4rem 0.7rem;
+  border-radius: 50rem;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--industrial-gray-light);
+}
+
+.empty-state p {
+  margin-bottom: 0;
+}
+
+/* Worker Profile */
+.worker-profile {
+  padding: 1rem;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--industrial-gray-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.profile-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.assigned-machines-list {
+  padding-left: 1.5rem;
+}
+
+.worker-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.stat-item {
+  text-align: center;
+  flex: 1;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: var(--border-radius);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--industrial-gray-dark);
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--industrial-gray-light);
+}
+
+/* Machine Checkboxes */
+.machine-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+
+/* Dark Mode Adjustments */
+.dark-mode .admin-management-container {
+  background-color: var(--dark-color);
+}
+
+.dark-mode .page-title {
+  color: var(--white);
+}
+
+.dark-mode .timestamp {
+  color: var(--gray-color);
+}
+
+.dark-mode .nav-tabs {
+  border-bottom-color: var(--secondary-light);
+}
+
+.dark-mode .nav-tabs .nav-link {
+  color: var(--gray-color);
+}
+
+.dark-mode .nav-tabs .nav-link:hover {
+  color: var(--white);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .nav-tabs .nav-link.active {
+  color: var(--white);
+  border-bottom-color: var(--safety-yellow);
+}
+
+.dark-mode .section-card {
+  background-color: var(--secondary-light);
+}
+
+.dark-mode .section-card .card-header {
+  background-color: var(--secondary-color);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .section-card .card-header h2 {
+  color: var(--white);
+}
+
+.dark-mode .machines-table th, 
+.dark-mode .workers-table th {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--white);
+}
+
+.dark-mode .machines-table td, 
+.dark-mode .workers-table td {
+  color: var(--light-color);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .empty-state {
+  color: var(--gray-color);
+}
+
+.dark-mode .profile-avatar {
+  background-color: var(--secondary-color);
+}
+
+.dark-mode .stat-item {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .stat-value {
+  color: var(--white);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .section-card .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .header-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  
+  .export-btn {
+    width: 100%;
+  }
+  
+  .add-btn {
+    width: 100%;
+  }
+  
+  .worker-stats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .machine-checkboxes {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 576px) {
+  .admin-management-container .nav-tabs .nav-link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  .section-card .card-body {
+    padding: 1rem;
+  }
+  
+  .machines-table th, 
+  .workers-table th,
+  .machines-table td, 
+  .workers-table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Demo mode styles */
+.demo-mode-badge {
+  background-color: #ffc107;
+  color: #212529;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-left: 1rem;
+}
+
+.demo-mode-alert {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  background-color: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+/* Add a subtle indicator to table rows in demo mode */
+.demo-mode .table tbody tr {
+  position: relative;
+}
+
+.demo-mode .table tbody tr::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #ffc107;
+  opacity: 0.5;
+}
+
+/* Highlight form fields in demo mode */
+.demo-mode .form-control:focus,
+.demo-mode .form-select:focus {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25);
+}
+
+/* Loading badge */
+.loading-badge {
+  background-color: #17a2b8;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Debug panel */
+.debug-panel {
+  border: 1px solid #17a2b8;
+  background-color: #f8f9fa;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.debug-panel .card-header {
+  background-color: #17a2b8;
+  color: white;
+  font-weight: bold;
+  padding: 10px 15px;
+}
+
+.debug-panel .card-body {
+  padding: 15px;
+  font-size: 14px;
+}
+
+.debug-json {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-family: monospace;
+  white-space: pre-wrap;
+} 

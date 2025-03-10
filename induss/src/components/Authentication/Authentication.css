@@ -1,0 +1,26 @@
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--light-gray);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  border: none;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.auth-card .form-control {
+  border-radius: 4px;
+  padding: 10px 15px;
+}
+
+.auth-card .btn {
+  padding: 10px;
+  border-radius: 4px;
+  font-weight: 500;
+} 

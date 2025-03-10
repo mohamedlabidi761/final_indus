@@ -1,0 +1,99 @@
+/* Navigation */
+.industrial-nav {
+  background-color: var(--industrial-blue);
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.nav-link {
+  color: var(--white) !important;
+  padding: 10px 15px;
+  margin: 5px 0;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Dashboard */
+.dashboard-container {
+  padding: 20px;
+}
+
+.machine-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-item {
+  padding: 10px;
+  border-radius: 4px;
+  text-align: center;
+  color: white;
+}
+
+.status-item.running { background-color: var(--green); }
+.status-item.stopped { background-color: var(--dark-gray); }
+.status-item.error { background-color: var(--red); }
+
+/* Authentication */
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--light-gray);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  border: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  text-align: center;
+  font-family: 'Roboto', sans-serif; /* Utilisez une police moderne */
+  font-weight: 700; /* Texte en gras */
+  color: var(--industrial-blue); /* Couleur du thème */
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-size: 2.5rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+h2 {
+  font-size: 2rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+h3 {
+  font-size: 1.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+h4 {
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+h5 {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+}
+
+h6 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1px;
+} 
