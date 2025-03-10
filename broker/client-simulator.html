@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP8266 Device Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #messageContainer {
+            height: 300px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .received {
+            background-color: #e3f2fd;
+        }
+        .sent {
+            background-color: #e8f5e9;
+        }
+        .system {
+            background-color: #fff3e0;
+            font-style: italic;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        input, button, select {
+            padding: 8px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        button {
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        button.danger:hover {
+            background-color: #d32f2f;
+        }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.secondary:hover {
+            background-color: #1976D2;
+        }
+        #connectionStatus {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .disconnected {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .device-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .device-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .sensor-group {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .sensor-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .sensor-label {
+            width: 120px;
+            font-weight: bold;
+        }
+        .sensor-value {
+            flex-grow: 1;
+        }
+        .sensor-slider {
+            width: 200px;
+        }
+        .sensor-toggle {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .sensor-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        #server-settings {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .settings-label {
+            width: 120px;
+            font-weight: bold;
+        }
+        .settings-value {
+            flex-grow: 1;
+        }
+        .api-test {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+        }
+        .api-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP8266 Device Simulator</h1>
+    
+    <div id="server-settings">
+        <h3>Server Settings</h3>
+        <div class="settings-row">
+            <div class="settings-label">Server URL:</div>
+            <div class="settings-value">
+                <input type="text" id="serverUrl" value="ws://localhost:3000" style="width: 250px;">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Auto-send:</div>
+            <div class="settings-value">
+                <select id="autoSendInterval">
+                    <option value="0">Disabled</option>
+                    <option value="2000" selected>Every 2 seconds</option>
+                    <option value="5000">Every 5 seconds</option>
+                    <option value="10000">Every 10 seconds</option>
+                    <option value="30000">Every 30 seconds</option>
+                    <option value="60000">Every minute</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div id="devices-container">
+        <!-- Device cards will be added here -->
+    </div>
+    
+    <div style="margin: 20px 0;">
+        <button id="addDeviceBtn" class="secondary">Add Device</button>
+        <button id="sendAllBtn">Send All Data</button>
+        <button id="clearLogBtn" class="danger">Clear Log</button>
+    </div>
+    
+    <div class="api-test">
+        <h3>API Testing</h3>
+        <div class="api-buttons">
+            <button id="getDevicesBtn">Get All Devices</button>
+            <button id="getAllDataBtn">Get All Data</button>
+            <button id="getDeviceDataBtn">Get Selected Device Data</button>
+            <button id="getDeviceHistoryBtn">Get Selected Device History</button>
+        </div>
+    </div>
+    
+    <div id="connectionStatus" class="disconnected">Log</div>
+    
+    <div id="messageContainer"></div>
+    
+    <script>
+        // Global variables
+        const devices = new Map();
+        let deviceCounter = 1;
+        let autoSendInterval = null;
+        let selectedDeviceId = null;
+        
+        // DOM elements
+        const messageContainer = document.getElementById('messageContainer');
+        const devicesContainer = document.getElementById('devices-container');
+        const addDeviceBtn = document.getElementById('addDeviceBtn');
+        const sendAllBtn = document.getElementById('sendAllBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const serverUrlInput = document.getElementById('serverUrl');
+        const autoSendSelect = document.getElementById('autoSendInterval');
+        
+        // API test buttons
+        const getDevicesBtn = document.getElementById('getDevicesBtn');
+        const getAllDataBtn = document.getElementById('getAllDataBtn');
+        const getDeviceDataBtn = document.getElementById('getDeviceDataBtn');
+        const getDeviceHistoryBtn = document.getElementById('getDeviceHistoryBtn');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add first device
+            addDevice();
+            
+            // Setup event listeners
+            addDeviceBtn.addEventListener('click', addDevice);
+            sendAllBtn.addEventListener('click', sendAllDeviceData);
+            clearLogBtn.addEventListener('click', clearLog);
+            autoSendSelect.addEventListener('change', updateAutoSend);
+            
+            // Setup API test buttons
+            getDevicesBtn.addEventListener('click', testGetDevices);
+            getAllDataBtn.addEventListener('click', testGetAllData);
+            getDeviceDataBtn.addEventListener('click', testGetDeviceData);
+            getDeviceHistoryBtn.addEventListener('click', testGetDeviceHistory);
+            
+            // Setup auto-send
+            updateAutoSend();
+        });
+        
+        // Add a message to the log
+        function addMessage(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', type);
+            
+            // Format JSON if the message is an object
+            if (typeof message === 'object') {
+                messageElement.textContent = JSON.stringify(message, null, 2);
+            } else {
+                messageElement.textContent = message;
+            }
+            
+            messageContainer.appendChild(messageElement);
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+        
+        // Clear the log
+        function clearLog() {
+            messageContainer.innerHTML = '';
+            addMessage('Log cleared', 'system');
+        }
+        
+        // Update auto-send interval
+        function updateAutoSend() {
+            const interval = parseInt(autoSendSelect.value);
+            
+            // Clear existing interval
+            if (autoSendInterval) {
+                clearInterval(autoSendInterval);
+                autoSendInterval = null;
+            }
+            
+            // Set new interval if not disabled
+            if (interval > 0) {
+                autoSendInterval = setInterval(sendAllDeviceData, interval);
+                addMessage(`Auto-send enabled: every ${interval/1000} seconds`, 'system');
+            } else {
+                addMessage('Auto-send disabled', 'system');
+            }
+        }
+        
+        // Add a new device
+        function addDevice() {
+            const deviceId = `esp8266_${deviceCounter++}`;
+            const deviceName = `ESP8266 Sensor ${deviceCounter-1}`;
+            
+            // Create device object
+            const device = {
+                id: deviceId,
+                name: deviceName,
+                type: 'industrial',
+                socket: null,
+                connected: false,
+                registered: false,
+                sensors: {
+                    temperature: 25.0,
+                    humidity: 50.0,
+                    vibration: 0,
+                    light: 0
+                },
+                system: {
+                    uptime: 0,
+                    freeHeap: 40000,
+                    rssi: -65
+                }
+            };
+            
+            // Store device
+            devices.set(deviceId, device);
+            
+            // Create device card
+            createDeviceCard(device);
+            
+            // Set as selected device if it's the first one
+            if (devices.size === 1) {
+                selectedDeviceId = deviceId;
+            }
+            
+            addMessage(`Added device: ${deviceName} (${deviceId})`, 'system');
+        }
+        
+        // Create device card in UI
+        function createDeviceCard(device) {
+            const deviceCard = document.createElement('div');
+            deviceCard.id = `device-card-${device.id}`;
+            deviceCard.className = 'device-card';
+            
+            deviceCard.innerHTML = `
+                <div class="device-header">
+                    <h3>${device.name}</h3>
+                    <span id="device-status-${device.id}" class="disconnected">Disconnected</span>
+                </div>
+                
+                <div>
+                    <div class="settings-row">
+                        <div class="settings-label">Device ID:</div>
+                        <div class="settings-value">
+                            <input type="text" id="device-id-${device.id}" value="${device.id}" style="width: 200px;">
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">Device Name:</div>
+                        <div class="settings-value">
+                            <input type="text" id="device-name-${device.id}" value="${device.name}" style="width: 200px;">
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">Device Type:</div>
+                        <div class="settings-value">
+                            <select id="device-type-${device.id}">
+                                <option value="environmental" ${device.type === 'environmental' ? 'selected' : ''}>Environmental</option>
+                                <option value="motion" ${device.type === 'motion' ? 'selected' : ''}>Motion Sensor</option>
+                                <option value="light" ${device.type === 'light' ? 'selected' : ''}>Light Sensor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">Selected:</div>
+                        <div class="settings-value">
+                            <input type="radio" name="selected-device" id="select-device-${device.id}" 
+                                   ${selectedDeviceId === device.id ? 'checked' : ''}>
+                            <label for="select-device-${device.id}">Use for API tests</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sensor-group">
+                    <h4>Sensors</h4>
+                    
+                    <div class="sensor-row">
+                        <div class="sensor-label">Temperature:</div>
+                        <div class="sensor-value">
+                            <input type="range" id="temp-slider-${device.id}" class="sensor-slider" 
+                                   min="0" max="50" step="0.1" value="${device.sensors.temperature}">
+                            <span id="temp-value-${device.id}">${device.sensors.temperature}°C</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sensor-row">
+                        <div class="sensor-label">Humidity:</div>
+                        <div class="sensor-value">
+                            <input type="range" id="humidity-slider-${device.id}" class="sensor-slider" 
+                                   min="0" max="100" step="1" value="${device.sensors.humidity}">
+                            <span id="humidity-value-${device.id}">${device.sensors.humidity}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sensor-row">
+                        <div class="sensor-label">Vibration:</div>
+                        <div class="sensor-value">
+                            <label class="sensor-toggle">
+                                <input type="checkbox" id="vibration-toggle-${device.id}" ${device.sensors.vibration ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                            <span id="vibration-value-${device.id}">${device.sensors.vibration ? 'Detected' : 'None'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sensor-row">
+                        <div class="sensor-label">Light:</div>
+                        <div class="sensor-value">
+                            <input type="range" id="light-slider-${device.id}" class="sensor-slider" 
+                                   min="0" max="100" step="1" value="${device.sensors.light}">
+                            <span id="light-value-${device.id}">${device.sensors.light}%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-controls">
+                    <button id="connect-btn-${device.id}" class="secondary">Connect</button>
+                    <button id="disconnect-btn-${device.id}" class="danger" disabled>Disconnect</button>
+                    <button id="send-btn-${device.id}">Send Data</button>
+                    <button id="remove-btn-${device.id}" class="danger">Remove Device</button>
+                </div>
+            `;
+            
+            devicesContainer.appendChild(deviceCard);
+            
+            // Setup event listeners for this device
+            setupDeviceEventListeners(device);
+        }
+        
+        // Setup event listeners for device controls
+        function setupDeviceEventListeners(device) {
+            // Connect button
+            document.getElementById(`connect-btn-${device.id}`).addEventListener('click', () => {
+                connectDevice(device);
+            });
+            
+            // Disconnect button
+            document.getElementById(`disconnect-btn-${device.id}`).addEventListener('click', () => {
+                disconnectDevice(device);
+            });
+            
+            // Send data button
+            document.getElementById(`send-btn-${device.id}`).addEventListener('click', () => {
+                sendDeviceData(device);
+            });
+            
+            // Remove device button
+            document.getElementById(`remove-btn-${device.id}`).addEventListener('click', () => {
+                removeDevice(device);
+            });
+            
+            // Temperature slider
+            const tempSlider = document.getElementById(`temp-slider-${device.id}`);
+            const tempValue = document.getElementById(`temp-value-${device.id}`);
+            
+            tempSlider.addEventListener('input', () => {
+                device.sensors.temperature = parseFloat(tempSlider.value);
+                tempValue.textContent = `${device.sensors.temperature}°C`;
+            });
+            
+            // Humidity slider
+            const humiditySlider = document.getElementById(`humidity-slider-${device.id}`);
+            const humidityValue = document.getElementById(`humidity-value-${device.id}`);
+            
+            humiditySlider.addEventListener('input', () => {
+                device.sensors.humidity = parseFloat(humiditySlider.value);
+                humidityValue.textContent = `${device.sensors.humidity}%`;
+            });
+            
+            // Vibration toggle
+            const vibrationToggle = document.getElementById(`vibration-toggle-${device.id}`);
+            const vibrationValue = document.getElementById(`vibration-value-${device.id}`);
+            
+            vibrationToggle.addEventListener('change', () => {
+                device.sensors.vibration = vibrationToggle.checked ? 1 : 0;
+                vibrationValue.textContent = device.sensors.vibration ? 'Detected' : 'None';
+            });
+            
+            // Light slider
+            const lightSlider = document.getElementById(`light-slider-${device.id}`);
+            const lightValue = document.getElementById(`light-value-${device.id}`);
+            
+            lightSlider.addEventListener('input', () => {
+                device.sensors.light = parseFloat(lightSlider.value);
+                lightValue.textContent = `${device.sensors.light}%`;
+            });
+            
+            // Device ID input
+            document.getElementById(`device-id-${device.id}`).addEventListener('change', (e) => {
+                const newId = e.target.value.trim();
+                if (newId && newId !== device.id) {
+                    // Update device ID
+                    devices.delete(device.id);
+                    
+                    // Update selected device if this was selected
+                    if (selectedDeviceId === device.id) {
+                        selectedDeviceId = newId;
+                    }
+                    
+                    device.id = newId;
+                    devices.set(newId, device);
+                    
+                    // Recreate the card with new ID
+                    const oldCard = document.getElementById(`device-card-${device.id}`);
+                    devicesContainer.removeChild(oldCard);
+                    createDeviceCard(device);
+                    
+                    addMessage(`Device ID changed to: ${newId}`, 'system');
+                }
+            });
+            
+            // Device name input
+            document.getElementById(`device-name-${device.id}`).addEventListener('change', (e) => {
+                device.name = e.target.value.trim();
+            });
+            
+            // Device type select
+            document.getElementById(`device-type-${device.id}`).addEventListener('change', (e) => {
+                device.type = e.target.value;
+            });
+            
+            // Device selection radio
+            document.getElementById(`select-device-${device.id}`).addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    selectedDeviceId = device.id;
+                    addMessage(`Selected device: ${device.name} (${device.id})`, 'system');
+                }
+            });
+        }
+        
+        // Connect device to WebSocket server
+        function connectDevice(device) {
+            // Get server URL
+            const serverUrl = serverUrlInput.value.trim();
+            
+            // Check if already connected
+            if (device.socket && device.connected) {
+                addMessage(`Device ${device.id} is already connected`, 'system');
+                return;
+            }
+            
+            // Create WebSocket connection
+            device.socket = new WebSocket(serverUrl);
+            
+            // Update UI
+            const connectBtn = document.getElementById(`connect-btn-${device.id}`);
+            const disconnectBtn = document.getElementById(`disconnect-btn-${device.id}`);
+            const statusElement = document.getElementById(`device-status-${device.id}`);
+            
+            // Connection opened
+            device.socket.addEventListener('open', (event) => {
+                device.connected = true;
+                device.registered = false;
+                
+                // Update UI
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                
+                addMessage(`Device ${device.id} connected to server`, 'system');
+                
+                // Register device
+                registerDevice(device);
+                
+                // Update system uptime
+                device.system.uptime = 0;
+                setInterval(() => {
+                    device.system.uptime += 1;
+                }, 1000);
+            });
+            
+            // Listen for messages
+            device.socket.addEventListener('message', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addMessage(`${device.id} received: ${JSON.stringify(data)}`, 'received');
+                    
+                    // Check for registration confirmation
+                    if (data.type === 'registered') {
+                        device.registered = true;
+                        addMessage(`Device ${device.id} registered with server`, 'system');
+                    }
+                } catch (error) {
+                    addMessage(`${device.id} received: ${event.data}`, 'received');
+                }
+            });
+            
+            // Connection closed
+            device.socket.addEventListener('close', (event) => {
+                device.connected = false;
+                device.registered = false;
+                
+                // Update UI
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                
+                addMessage(`Device ${device.id} disconnected from server`, 'system');
+            });
+            
+            // Connection error
+            device.socket.addEventListener('error', (event) => {
+                addMessage(`Device ${device.id} connection error`, 'error');
+                console.error('WebSocket error:', event);
+            });
+        }
+        
+        // Disconnect device from server
+        function disconnectDevice(device) {
+            if (device.socket) {
+                device.socket.close();
+                device.socket = null;
+            }
+        }
+        
+        // Register device with server
+        function registerDevice(device) {
+            if (!device.connected || !device.socket) {
+                addMessage(`Cannot register ${device.id}: not connected`, 'error');
+                return;
+            }
+            
+            // Create registration message
+            const registrationMessage = {
+                type: 'register',
+                deviceId: device.id,
+                name: device.name,
+                type: device.type,
+                chipId: Math.floor(Math.random() * 1000000),
+                macAddress: generateMacAddress()
+            };
+            
+            // Send registration
+            device.socket.send(JSON.stringify(registrationMessage));
+            addMessage(`${device.id} sent registration:`, 'sent');
+            addMessage(registrationMessage, 'sent');
+        }
+        
+        // Send sensor data for a device
+        function sendDeviceData(device) {
+            if (!device.connected || !device.socket) {
+                addMessage(`Cannot send data for ${device.id}: not connected`, 'error');
+                return;
+            }
+            
+            // Update system values
+            device.system.freeHeap = Math.floor(30000 + Math.random() * 20000);
+            device.system.rssi = Math.floor(-30 - Math.random() * 60);
+            
+            // Create data message - match the exact format expected by server.js
+            const dataMessage = {
+                device: device.id,
+                timestamp: Date.now(),
+                sensors: {
+                    temperature: device.sensors.temperature,
+                    humidity: device.sensors.humidity,
+                    vibration: device.sensors.vibration,
+                    light: device.sensors.light
+                },
+                system: {
+                    uptime: device.system.uptime,
+                    freeHeap: device.system.freeHeap,
+                    rssi: device.system.rssi
+                }
+            };
+            
+            // Send data
+            device.socket.send(JSON.stringify(dataMessage));
+            addMessage(`${device.id} sent data:`, 'sent');
+            addMessage(dataMessage, 'sent');
+        }
+        
+        // Send data for all connected devices
+        function sendAllDeviceData() {
+            let sentCount = 0;
+            
+            devices.forEach(device => {
+                if (device.connected && device.registered) {
+                    sendDeviceData(device);
+                    sentCount++;
+                }
+            });
+            
+            if (sentCount === 0) {
+                addMessage('No connected devices to send data', 'system');
+            } else {
+                addMessage(`Sent data for ${sentCount} device(s)`, 'system');
+            }
+        }
+        
+        // Remove a device
+        function removeDevice(device) {
+            // Disconnect if connected
+            if (device.connected) {
+                disconnectDevice(device);
+            }
+            
+            // Remove from devices map
+            devices.delete(device.id);
+            
+            // Remove card from UI
+            const card = document.getElementById(`device-card-${device.id}`);
+            devicesContainer.removeChild(card);
+            
+            // Update selected device if this was selected
+            if (selectedDeviceId === device.id) {
+                selectedDeviceId = devices.size > 0 ? devices.keys().next().value : null;
+            }
+            
+            addMessage(`Removed device: ${device.name} (${device.id})`, 'system');
+        }
+        
+        // Generate a random MAC address
+        function generateMacAddress() {
+            const hexDigits = "0123456789ABCDEF";
+            let macAddress = "";
+            
+            for (let i = 0; i < 6; i++) {
+                macAddress += hexDigits.charAt(Math.floor(Math.random() * 16));
+                macAddress += hexDigits.charAt(Math.floor(Math.random() * 16));
+                if (i < 5) macAddress += ":";
+            }
+            
+            return macAddress;
+        }
+        
+        // API Test Functions
+        
+        // Test GET /api/devices
+        async function testGetDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                
+                addMessage('API Response - GET /api/devices:', 'system');
+                addMessage(data, 'received');
+            } catch (error) {
+                addMessage(`API Error - GET /api/devices: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test GET /api/data
+        async function testGetAllData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                
+                addMessage('API Response - GET /api/data:', 'system');
+                addMessage(data, 'received');
+            } catch (error) {
+                addMessage(`API Error - GET /api/data: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test GET /api/devices/:deviceId/data
+        async function testGetDeviceData() {
+            if (!selectedDeviceId) {
+                addMessage('No device selected for API test', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/devices/${selectedDeviceId}/data`);
+                const data = await response.json();
+                
+                addMessage(`API Response - GET /api/devices/${selectedDeviceId}/data:`, 'system');
+                addMessage(data, 'received');
+            } catch (error) {
+                addMessage(`API Error - GET /api/devices/${selectedDeviceId}/data: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test GET /api/devices/:deviceId/history
+        async function testGetDeviceHistory() {
+            if (!selectedDeviceId) {
+                addMessage('No device selected for API test', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/devices/${selectedDeviceId}/history?limit=10`);
+                const data = await response.json();
+                
+                addMessage(`API Response - GET /api/devices/${selectedDeviceId}/history:`, 'system');
+                addMessage(data, 'received');
+            } catch (error) {
+                addMessage(`API Error - GET /api/devices/${selectedDeviceId}/history: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html> 

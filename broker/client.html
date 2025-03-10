@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #messageContainer {
+            height: 300px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .received {
+            background-color: #e3f2fd;
+        }
+        .sent {
+            background-color: #e8f5e9;
+            text-align: right;
+        }
+        .system {
+            background-color: #fff3e0;
+            font-style: italic;
+        }
+        input, button {
+            padding: 8px;
+            margin-right: 5px;
+        }
+        input {
+            width: 70%;
+        }
+        button {
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #connectionStatus {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .disconnected {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Client</h1>
+    
+    <div id="connectionStatus" class="disconnected">Disconnected</div>
+    
+    <div id="messageContainer"></div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+        <button id="sendButton" disabled>Send</button>
+        <button id="connectButton">Connect</button>
+        <button id="disconnectButton" disabled>Disconnect</button>
+    </div>
+    
+    <script>
+        let socket;
+        const messageContainer = document.getElementById('messageContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const connectionStatus = document.getElementById('connectionStatus');
+        
+        // Add a message to the container
+        function addMessage(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', type);
+            messageElement.textContent = message;
+            messageContainer.appendChild(messageElement);
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+        
+        // Connect to WebSocket server
+        connectButton.addEventListener('click', () => {
+            // Create WebSocket connection
+            socket = new WebSocket('ws://localhost:3000');
+            
+            // Connection opened
+            socket.addEventListener('open', (event) => {
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'connected';
+                
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                connectButton.disabled = true;
+                disconnectButton.disabled = false;
+                
+                addMessage('Connected to server', 'system');
+            });
+            
+            // Listen for messages
+            socket.addEventListener('message', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'connection') {
+                        addMessage(`Server: ${data.message}`, 'system');
+                    } else if (data.type === 'echo') {
+                        addMessage(`Server echoed: ${JSON.stringify(data.data)}`, 'received');
+                    } else if (data.type === 'error') {
+                        addMessage(`Error: ${data.message}`, 'system');
+                    } else {
+                        addMessage(`Received: ${event.data}`, 'received');
+                    }
+                } catch (error) {
+                    addMessage(`Received: ${event.data}`, 'received');
+                }
+            });
+            
+            // Connection closed
+            socket.addEventListener('close', (event) => {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'disconnected';
+                
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+                connectButton.disabled = false;
+                disconnectButton.disabled = true;
+                
+                addMessage('Disconnected from server', 'system');
+            });
+            
+            // Connection error
+            socket.addEventListener('error', (event) => {
+                addMessage('Connection error', 'system');
+                console.error('WebSocket error:', event);
+            });
+        });
+        
+        // Send a message
+        sendButton.addEventListener('click', () => {
+            const message = messageInput.value.trim();
+            if (message && socket && socket.readyState === WebSocket.OPEN) {
+                // Send as JSON
+                const jsonMessage = {
+                    text: message,
+                    timestamp: new Date().toISOString()
+                };
+                
+                socket.send(JSON.stringify(jsonMessage));
+                addMessage(`You: ${message}`, 'sent');
+                messageInput.value = '';
+            }
+        });
+        
+        // Send message on Enter key
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+        
+        // Disconnect from server
+        disconnectButton.addEventListener('click', () => {
+            if (socket) {
+                socket.close();
+            }
+        });
+    </script>
+</body>
+</html> 

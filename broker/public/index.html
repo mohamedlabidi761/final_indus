@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP8266 IoT Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 20px;
+        }
+        .sensor-card {
+            margin-bottom: 20px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .chart-container {
+            height: 250px;
+            margin-top: 15px;
+        }
+        .auto-refresh {
+            margin-left: 10px;
+        }
+        .sensor-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .sensor-label {
+            font-size: 1rem;
+            color: #6c757d;
+        }
+        .sensor-icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="pb-3 mb-4 border-bottom">
+            <div class="d-flex align-items-center">
+                <h1 class="display-5 fw-bold">ESP8266 IoT Dashboard</h1>
+                <div class="ms-auto">
+                    <span id="connection-status" class="badge bg-secondary">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Device Overview</h5>
+                        <div>
+                            <div class="form-check form-switch d-inline-block auto-refresh">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                                <label class="form-check-label" for="auto-refresh">Auto-refresh</label>
+                            </div>
+                            <button id="refresh-btn" class="btn btn-sm btn-primary">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="devices-container" class="row">
+                            <div class="col-12 text-center">
+                                <p>Loading devices...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sensor-data-container" class="row">
+            <!-- Sensor data cards will be added here -->
+        </div>
+
+        <div class="modal fade" id="deviceHistoryModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Sensor History</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="chart-container">
+                            <canvas id="historyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="pt-3 mt-4 text-muted border-top">
+            &copy; 2023 ESP8266 IoT Dashboard
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let socket;
+        let devices = {};
+        let historyChart;
+        let historyModal;
+        let autoRefreshInterval;
+
+        // DOM elements
+        const connectionStatus = document.getElementById('connection-status');
+        const devicesContainer = document.getElementById('devices-container');
+        const sensorDataContainer = document.getElementById('sensor-data-container');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const autoRefreshCheckbox = document.getElementById('auto-refresh');
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            // Setup WebSocket connection
+            setupWebSocket();
+            
+            // Load initial data
+            fetchDevices();
+            
+            // Setup refresh button
+            refreshBtn.addEventListener('click', fetchDevices);
+            
+            // Setup auto-refresh
+            autoRefreshCheckbox.addEventListener('change', toggleAutoRefresh);
+            toggleAutoRefresh();
+            
+            // Setup modal
+            historyModal = new bootstrap.Modal(document.getElementById('deviceHistoryModal'));
+        });
+
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            
+            if (autoRefreshCheckbox.checked) {
+                autoRefreshInterval = setInterval(fetchDevices, 30000); // Refresh every 30 seconds
+            }
+        }
+
+        // Setup WebSocket connection
+        function setupWebSocket() {
+            // Get the host from the current URL
+            const host = window.location.host;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            
+            // Create WebSocket connection
+            socket = new WebSocket(`${protocol}//${host}`);
+            
+            // Connection opened
+            socket.addEventListener('open', (event) => {
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'badge bg-success';
+                console.log('Connected to WebSocket server');
+            });
+            
+            // Listen for messages
+            socket.addEventListener('message', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received WebSocket message:', data);
+                    
+                    // Handle different message types
+                    if (data.type === 'sensor_data') {
+                        updateSensorData(data.data);
+                    } else if (data.type === 'connection') {
+                        console.log('Connection message:', data.message);
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            });
+            
+            // Connection closed
+            socket.addEventListener('close', (event) => {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'badge bg-danger';
+                console.log('Disconnected from WebSocket server');
+                
+                // Try to reconnect after 5 seconds
+                setTimeout(setupWebSocket, 5000);
+            });
+            
+            // Connection error
+            socket.addEventListener('error', (event) => {
+                connectionStatus.textContent = 'Error';
+                connectionStatus.className = 'badge bg-warning';
+                console.error('WebSocket error:', event);
+            });
+        }
+
+        // Fetch devices from API
+        async function fetchDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                
+                // Update devices
+                renderDevices(data.devices);
+                
+                // Fetch data for each device
+                data.devices.forEach(device => {
+                    fetchDeviceData(device.deviceId);
+                });
+            } catch (error) {
+                console.error('Error fetching devices:', error);
+                devicesContainer.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p class="text-danger">Error loading devices. Please try again.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Render devices list
+        function renderDevices(devicesList) {
+            if (devicesList.length === 0) {
+                devicesContainer.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p>No devices connected. Connect an ESP8266 device to get started.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            
+            devicesList.forEach(device => {
+                const statusClass = device.connected ? 'status-online' : 'status-offline';
+                const statusText = device.connected ? 'Online' : 'Offline';
+                const lastSeen = new Date(device.lastSeen).toLocaleString();
+                
+                html += `
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <span class="status-indicator ${statusClass}"></span>
+                                    ${device.name}
+                                </h5>
+                                <p class="card-text"><strong>Status:</strong> ${statusText}</p>
+                                <p class="card-text"><strong>ID:</strong> ${device.deviceId}</p>
+                                <p class="card-text"><strong>Type:</strong> ${device.type}</p>
+                                <p class="card-text"><strong>Last seen:</strong> ${lastSeen}</p>
+                                <div class="d-flex justify-content-between">
+                                    <button class="btn btn-sm btn-primary view-history-btn" data-device-id="${device.deviceId}">
+                                        View History
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary refresh-device-btn" data-device-id="${device.deviceId}">
+                                        Refresh Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Store device info
+                devices[device.deviceId] = device;
+            });
+            
+            devicesContainer.innerHTML = html;
+            
+            // Add event listeners to buttons
+            document.querySelectorAll('.view-history-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const deviceId = e.target.getAttribute('data-device-id');
+                    showDeviceHistory(deviceId);
+                });
+            });
+            
+            document.querySelectorAll('.refresh-device-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const deviceId = e.target.getAttribute('data-device-id');
+                    fetchDeviceData(deviceId);
+                });
+            });
+        }
+
+        // Fetch data for a specific device
+        async function fetchDeviceData(deviceId) {
+            try {
+                const response = await fetch(`/api/devices/${deviceId}/data`);
+                const data = await response.json();
+                
+                // Update sensor data display
+                updateSensorData(data);
+            } catch (error) {
+                console.error(`Error fetching data for device ${deviceId}:`, error);
+            }
+        }
+
+        // Update sensor data display
+        function updateSensorData(data) {
+            if (!data || !data.device) return;
+            
+            const deviceId = data.device;
+            const deviceInfo = devices[deviceId] || { name: deviceId };
+            
+            // Check if card already exists
+            let card = document.getElementById(`sensor-card-${deviceId}`);
+            
+            if (!card) {
+                // Create new card
+                const cardHtml = `
+                    <div class="col-md-6" id="sensor-card-${deviceId}">
+                        <div class="card sensor-card">
+                            <div class="card-header">
+                                <h5 class="mb-0">${deviceInfo.name}</h5>
+                                <span class="badge bg-info">${new Date(data.receivedAt || new Date()).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="card-body" id="sensor-body-${deviceId}">
+                                Loading sensor data...
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                sensorDataContainer.innerHTML += cardHtml;
+                card = document.getElementById(`sensor-card-${deviceId}`);
+            } else {
+                // Update timestamp
+                const timestampBadge = card.querySelector('.badge');
+                if (timestampBadge) {
+                    timestampBadge.textContent = new Date(data.receivedAt || new Date()).toLocaleTimeString();
+                }
+            }
+            
+            // Update card body with sensor data
+            const cardBody = document.getElementById(`sensor-body-${deviceId}`);
+            
+            if (data.sensors) {
+                let sensorHtml = '<div class="row">';
+                
+                // Temperature
+                if (data.sensors.temperature !== undefined && data.sensors.temperature !== -1) {
+                    sensorHtml += `
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="sensor-icon">🌡️</div>
+                            <div class="sensor-value">${data.sensors.temperature.toFixed(1)}°C</div>
+                            <div class="sensor-label">Temperature</div>
+                        </div>
+                    `;
+                }
+                
+                // Humidity
+                if (data.sensors.humidity !== undefined && data.sensors.humidity !== -1) {
+                    sensorHtml += `
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="sensor-icon">💧</div>
+                            <div class="sensor-value">${data.sensors.humidity.toFixed(1)}%</div>
+                            <div class="sensor-label">Humidity</div>
+                        </div>
+                    `;
+                }
+                
+                // Vibration
+                if (data.sensors.vibration !== undefined) {
+                    const vibrationStatus = data.sensors.vibration ? 'Detected' : 'None';
+                    const vibrationIcon = data.sensors.vibration ? '📳' : '🔄';
+                    const vibrationClass = data.sensors.vibration ? 'text-danger' : 'text-muted';
+                    sensorHtml += `
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="sensor-icon">${vibrationIcon}</div>
+                            <div class="sensor-value ${vibrationClass}">${vibrationStatus}</div>
+                            <div class="sensor-label">Vibration</div>
+                        </div>
+                    `;
+                }
+                
+                // Light
+                if (data.sensors.light !== undefined) {
+                    const lightIcon = data.sensors.light > 50 ? '☀️' : '🌤️';
+                    sensorHtml += `
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="sensor-icon">${lightIcon}</div>
+                            <div class="sensor-value">${data.sensors.light}%</div>
+                            <div class="sensor-label">Light</div>
+                        </div>
+                    `;
+                }
+                
+                sensorHtml += '</div>';
+                
+                // System info
+                if (data.system) {
+                    sensorHtml += `
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small class="text-muted">
+                                        <strong>Uptime:</strong> ${formatUptime(data.system.uptime)}
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">
+                                        <strong>Memory:</strong> ${formatBytes(data.system.freeHeap)}
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">
+                                        <strong>Signal:</strong> ${data.system.rssi} dBm
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Last updated timestamp
+                sensorHtml += `
+                    <div class="mt-3 text-end">
+                        <small class="text-muted">
+                            Last updated: ${new Date(data.receivedAt || new Date()).toLocaleString()}
+                        </small>
+                    </div>
+                `;
+                
+                cardBody.innerHTML = sensorHtml;
+            } else {
+                cardBody.innerHTML = '<p>No sensor data available</p>';
+            }
+        }
+
+        // Show device history
+        async function showDeviceHistory(deviceId) {
+            try {
+                const response = await fetch(`/api/devices/${deviceId}/history?limit=50`);
+                const data = await response.json();
+                
+                if (data.data && data.data.length > 0) {
+                    renderHistoryChart(deviceId, data.data);
+                    historyModal.show();
+                } else {
+                    alert('No history data available for this device');
+                }
+            } catch (error) {
+                console.error(`Error fetching history for device ${deviceId}:`, error);
+                alert('Error loading history data');
+            }
+        }
+
+        // Render history chart
+        function renderHistoryChart(deviceId, historyData) {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            
+            // Destroy previous chart if it exists
+            if (historyChart) {
+                historyChart.destroy();
+            }
+            
+            // Prepare data
+            const labels = [];
+            const temperatureData = [];
+            const humidityData = [];
+            const vibrationData = [];
+            const lightData = [];
+            
+            // Process data in reverse to show oldest first
+            historyData.slice().reverse().forEach(item => {
+                const date = new Date(item.receivedAt);
+                labels.push(date.toLocaleTimeString());
+                
+                if (item.sensors) {
+                    temperatureData.push(item.sensors.temperature || null);
+                    humidityData.push(item.sensors.humidity || null);
+                    vibrationData.push(item.sensors.vibration !== undefined ? (item.sensors.vibration ? 1 : 0) : null);
+                    lightData.push(item.sensors.light !== undefined ? (item.sensors.light ? 1 : 0) : null);
+                }
+            });
+            
+            // Create chart
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: temperatureData,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: humidityData,
+                            borderColor: 'rgb(255, 205, 86)',
+                            backgroundColor: 'rgba(255, 205, 86, 0.1)',
+                            yAxisID: 'y1',
+                            stepped: true
+                        },
+                        {
+                            label: 'Vibration',
+                            data: vibrationData,
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            yAxisID: 'y1',
+                            stepped: true
+                        },
+                        {
+                            label: 'Light',
+                            data: lightData,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            yAxisID: 'y1',
+                            stepped: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    stacked: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            },
+                            min: 0,
+                            suggestedMax: 50
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'On/Off'
+                            },
+                            min: 0,
+                            max: 1,
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Format uptime in seconds to a readable string
+        function formatUptime(seconds) {
+            if (seconds === undefined || seconds === null) return 'Unknown';
+            
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (days > 0) {
+                return `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                return `${hours}h ${minutes}m ${secs}s`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            } else {
+                return `${secs}s`;
+            }
+        }
+
+        // Format bytes to a readable string
+        function formatBytes(bytes) {
+            if (bytes === undefined || bytes === null) return 'Unknown';
+            
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            if (bytes === 0) return '0 Bytes';
+            
+            const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+            if (i === 0) return bytes + ' ' + sizes[i];
+            
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html> 

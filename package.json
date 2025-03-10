@@ -1,0 +1,21 @@
+{
+  "name": "indust---copie",
+  "version": "1.0.0",
+  "description": "This project consists of two main folders:\r - `indus` - Frontend React application\r - `backend` - Node.js/Express API server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohamedlabidi761/final_indus.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mohamedlabidi761/final_indus/issues"
+  },
+  "homepage": "https://github.com/mohamedlabidi761/final_indus#readme"
+}
