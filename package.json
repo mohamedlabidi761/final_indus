@@ -17,5 +17,11 @@
   "bugs": {
     "url": "https://github.com/mohamedlabidi761/final_indus/issues"
   },
-  "homepage": "https://github.com/mohamedlabidi761/final_indus#readme"
+  "homepage": "https://github.com/mohamedlabidi761/final_indus#readme",
+  "dependencies": {
+    "firebase": "^11.5.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
 }

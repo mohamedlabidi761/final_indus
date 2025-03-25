@@ -240,4 +240,138 @@
   .page-header {
     padding-top: 10px;
   }
+}
+
+/* Layout Container */
+.layout-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-secondary);
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: 240px;
+  transition: margin-left 0.3s ease;
+}
+
+/* When navigation is collapsed */
+.side-nav.collapsed + .main-content {
+  margin-left: 70px;
+}
+
+/* Header Styles */
+.main-header {
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background-color: var(--bg-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.current-page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* User Profile */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 30px;
+  transition: background-color 0.2s;
+}
+
+.user-profile:hover {
+  background-color: var(--bg-hover);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.user-info {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .user-info {
+    display: block;
+  }
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.user-role {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Content */
+.content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* Footer */
+.main-footer {
+  padding: 15px 20px;
+  background-color: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
+  
+  .main-header {
+    padding: 0 15px;
+  }
+  
+  .current-page-title {
+    font-size: 1.3rem;
+  }
 } 

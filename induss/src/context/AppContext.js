@@ -90,6 +90,34 @@ const initialAlerts = [
   }
 ];
 
+// Sample notification data
+const initialNotifications = [
+  { 
+    id: 1, 
+    title: 'Critical Alert', 
+    message: 'Temperature exceeds threshold on Machine B', 
+    type: 'critical',
+    read: false, 
+    timestamp: new Date(Date.now() - 25 * 60000).toISOString() 
+  },
+  { 
+    id: 2, 
+    title: 'System Update', 
+    message: 'Maintenance scheduled for tomorrow at 10:00 AM', 
+    type: 'info',
+    read: true, 
+    timestamp: new Date(Date.now() - 3 * 3600000).toISOString() 
+  },
+  { 
+    id: 3, 
+    title: 'Warning', 
+    message: 'Low humidity levels detected in Zone C', 
+    type: 'warning',
+    read: false, 
+    timestamp: new Date(Date.now() - 8 * 3600000).toISOString() 
+  }
+];
+
 // Sample history data
 const initialHistory = [
   { 
@@ -177,6 +205,7 @@ export const AppProvider = ({ children }) => {
   const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
   const [machines, setMachines] = useState(initialMachines);
   const [alerts, setAlerts] = useState(initialAlerts);
+  const [notifications, setNotifications] = useState(initialNotifications);
   const [history, setHistory] = useState(initialHistory);
   const [productionData, setProductionData] = useState(generateProductionData());
   const [productData, setProductData] = useState(initialProductData);
@@ -256,6 +285,46 @@ export const AppProvider = ({ children }) => {
         nonConformingProducts: newNonConforming
       };
     });
+  };
+  
+  // Add new notification
+  const addNotification = (title, message, type = 'info') => {
+    const newNotification = {
+      id: Date.now(), // Simple unique ID
+      title,
+      message,
+      type,
+      read: false,
+      timestamp: new Date().toISOString()
+    };
+    
+    setNotifications(prev => [newNotification, ...prev]);
+    
+    // Optional: Show browser notification if permission granted
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: '/favicon.ico'
+      });
+    }
+    
+    return newNotification;
+  };
+  
+  // Mark notification as read
+  const markNotificationAsRead = (id) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true } 
+          : notification
+      )
+    );
+  };
+  
+  // Clear all notifications
+  const clearAllNotifications = () => {
+    setNotifications([]);
   };
   
   // Simulate real-time updates
@@ -338,30 +407,163 @@ export const AppProvider = ({ children }) => {
   
   // Calculate time ago from timestamp
   const timeAgo = (timestamp) => {
-    const seconds = Math.floor((new Date() - new Date(timestamp)) / 1000);
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - past) / 1000);
     
-    let interval = Math.floor(seconds / 31536000);
-    if (interval > 1) return `Il y a ${interval} ans`;
-    if (interval === 1) return `Il y a 1 an`;
+    if (diffInSeconds < 60) return 'just now';
     
-    interval = Math.floor(seconds / 2592000);
-    if (interval > 1) return `Il y a ${interval} mois`;
-    if (interval === 1) return `Il y a 1 mois`;
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     
-    interval = Math.floor(seconds / 86400);
-    if (interval > 1) return `Il y a ${interval} jours`;
-    if (interval === 1) return `Il y a 1 jour`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
     
-    interval = Math.floor(seconds / 3600);
-    if (interval > 1) return `Il y a ${interval} heures`;
-    if (interval === 1) return `Il y a 1 heure`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) return `${diffInDays}d ago`;
     
-    interval = Math.floor(seconds / 60);
-    if (interval > 1) return `Il y a ${interval} minutes`;
-    if (interval === 1) return `Il y a 1 minute`;
-    
-    return `Il y a ${Math.floor(seconds)} secondes`;
+    const diffInMonths = Math.floor(diffInDays / 30);
+    return `${diffInMonths}mo ago`;
   };
+  
+  // Listen for WebSocket notifications
+  useEffect(() => {
+    // This function would connect to your WebSocket server and listen for notifications
+    const connectToWebSocketServer = () => {
+      try {
+        const ws = new WebSocket('ws://localhost:3000');
+        
+        ws.onopen = () => {
+          console.log('Connected to WebSocket server');
+          
+          // Register as a web client with FCM token if available
+          const fcmToken = localStorage.getItem('fcmToken');
+          if (fcmToken) {
+            ws.send(JSON.stringify({
+              type: 'web_client',
+              fcmToken: fcmToken
+            }));
+          }
+        };
+        
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          
+          // Handle different message types
+          if (data.type === 'critical_state') {
+            addNotification(
+              'Critical Alert',
+              data.message,
+              'critical'
+            );
+          } else if (data.type === 'sensor_data') {
+            // Process sensor data (you might want to check for thresholds here)
+            const sensorData = data.data;
+            
+            // Example: Check for temperature threshold
+            if (sensorData.sensors && sensorData.sensors.temperature > 35) {
+              addNotification(
+                'High Temperature',
+                `Temperature on ${sensorData.device} is ${sensorData.sensors.temperature.toFixed(1)}°C`,
+                'warning'
+              );
+            }
+          }
+        };
+        
+        ws.onclose = () => {
+          console.log('Disconnected from WebSocket server. Reconnecting in 5s...');
+          setTimeout(connectToWebSocketServer, 5000);
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+        
+        return ws;
+      } catch (error) {
+        console.error('Error connecting to WebSocket:', error);
+        setTimeout(connectToWebSocketServer, 5000);
+      }
+    };
+    
+    // Connect to WebSocket server
+    const ws = connectToWebSocketServer();
+    
+    // Clean up on unmount
+    return () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, []);
+  
+  // Request notification permission
+  useEffect(() => {
+    const requestNotificationPermission = async () => {
+      if ('Notification' in window) {
+        try {
+          // Check if permission is already granted
+          if (Notification.permission === 'granted') {
+            console.log('Notification permission already granted');
+            return;
+          }
+
+          // Check if permission is denied
+          if (Notification.permission === 'denied') {
+            console.log('Notification permission denied');
+            // Add a notification to inform the user they need to enable notifications in browser settings
+            addNotification(
+              'Notification Permission Required',
+              'Please enable notifications in your browser settings to receive critical updates.',
+              'warning'
+            );
+            return;
+          }
+
+          // Request permission
+          const permission = await Notification.requestPermission();
+          console.log('Notification permission result:', permission);
+
+          if (permission === 'granted') {
+            console.log('Notification permission granted');
+            // Add a success notification
+            addNotification(
+              'Notifications Enabled',
+              'You will now receive notifications for critical updates.',
+              'success'
+            );
+          } else if (permission === 'denied') {
+            console.log('Notification permission denied');
+            // Add a warning notification
+            addNotification(
+              'Notification Permission Required',
+              'Please enable notifications in your browser settings to receive critical updates.',
+              'warning'
+            );
+          }
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+          // Add an error notification
+          addNotification(
+            'Notification Error',
+            'There was an error setting up notifications. Please try again later.',
+            'error'
+          );
+        }
+      } else {
+        console.log('Notifications not supported in this browser');
+        // Add an info notification
+        addNotification(
+          'Notifications Not Supported',
+          'Your browser does not support notifications.',
+          'info'
+        );
+      }
+    };
+    
+    requestNotificationPermission();
+  }, []);
   
   return (
     <AppContext.Provider value={{
@@ -383,7 +585,11 @@ export const AppProvider = ({ children }) => {
       user,
       setUser,
       formatTimestamp,
-      timeAgo
+      timeAgo,
+      notifications,
+      addNotification,
+      markNotificationAsRead,
+      clearAllNotifications
     }}>
       {children}
     </AppContext.Provider>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Notification Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>Push Notification Tester</h1>
+    
+    <div class="card">
+        <h2>Step 1: Request Notification Permission</h2>
+        <p>Click the button below to request permission to send notifications.</p>
+        <button id="requestPermissionBtn" class="button">Request Permission</button>
+        <div id="permissionStatus" class="status info">Waiting for permission request...</div>
+    </div>
+    
+    <div class="card">
+        <h2>Step 2: Get FCM Token</h2>
+        <p>After granting permission, get your FCM token.</p>
+        <button id="getFCMTokenBtn" class="button disabled">Get FCM Token</button>
+        <div id="tokenStatus" class="status info">Request notification permission first</div>
+        <pre id="fcmToken"></pre>
+    </div>
+    
+    <div class="card">
+        <h2>Step 3: Send Test Notification</h2>
+        <p>Send a test notification to verify everything is working.</p>
+        <button id="sendTestBtn" class="button disabled">Send Test Notification</button>
+        <div id="testStatus" class="status info">Get FCM token first</div>
+    </div>
+    
+    <div class="card">
+        <h2>Console Log</h2>
+        <pre id="consoleLog">Waiting for actions...</pre>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
+    
+    <script>
+        // Log function
+        function log(message) {
+            const consoleLog = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            consoleLog.textContent = `[${timestamp}] ${message}\n` + consoleLog.textContent;
+        }
+        
+        // Initialize Firebase
+        let firebaseConfig = {};
+        let firebaseInitialized = false;
+        let messaging;
+        let fcmToken = null;
+        
+        // Global variables to track service worker status
+        let swRegistration = null;
+        let swIsActive = false;
+        
+        // Check if required Firebase config is available
+        fetch('/api/firebase-config')
+            .then(response => response.json())
+            .then(config => {
+                if (config && config.apiKey) {
+                    firebaseConfig = config;
+                    initializeFirebase();
+                } else {
+                    log('Error: Firebase configuration missing or incomplete.');
+                    document.getElementById('permissionStatus').textContent = 'Error: Firebase not configured properly.';
+                    document.getElementById('permissionStatus').className = 'status error';
+                }
+            })
+            .catch(error => {
+                log(`Error fetching Firebase config: ${error.message}`);
+                document.getElementById('permissionStatus').textContent = 'Error: Could not load Firebase configuration.';
+                document.getElementById('permissionStatus').className = 'status error';
+            });
+        
+        function initializeFirebase() {
+            try {
+                // Check if Firebase is already initialized
+                if (firebase.apps && firebase.apps.length > 0) {
+                    log('Firebase already initialized, using existing app');
+                    messaging = firebase.messaging();
+                    firebaseInitialized = true;
+                    
+                    // Enable permission button
+                    const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+                    requestPermissionBtn.disabled = false;
+                    requestPermissionBtn.classList.remove('disabled');
+                    document.getElementById('permissionStatus').textContent = 'Firebase ready. Click the button to request permission.';
+                    return;
+                }
+                
+                // Initialize Firebase with the config
+                firebase.initializeApp(firebaseConfig);
+                messaging = firebase.messaging();
+                
+                // Check the VAPID key
+                log(`Initializing Firebase with vapidKey: ${firebaseConfig.vapidKey ? 'present' : 'missing'}`);
+                if (firebaseConfig.vapidKey) {
+                    log(`VAPID key starts with: ${firebaseConfig.vapidKey.substring(0, 10)}...`);
+                } else {
+                    log('WARNING: No VAPID key found in configuration');
+                }
+                
+                // Log success
+                firebaseInitialized = true;
+                log('Firebase initialized successfully');
+                
+                // Enable permission button
+                const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+                requestPermissionBtn.disabled = false;
+                requestPermissionBtn.classList.remove('disabled');
+                document.getElementById('permissionStatus').textContent = 'Firebase ready. Click the button to request permission.';
+            } catch (error) {
+                log(`Firebase initialization error: ${error.message}`);
+                document.getElementById('permissionStatus').textContent = `Error initializing Firebase: ${error.message}`;
+                document.getElementById('permissionStatus').className = 'status error';
+            }
+        }
+        
+        // Request permission
+        document.getElementById('requestPermissionBtn').addEventListener('click', async () => {
+            if (!firebaseInitialized) {
+                log('Firebase not initialized yet');
+                return;
+            }
+            
+            try {
+                log('Requesting notification permission...');
+                
+                // First register the service worker manually if it's not registered
+                if (!swRegistration || !swRegistration.active) {
+                    log('Registering service worker first...');
+                    try {
+                        swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        log(`Service worker registered with scope: ${swRegistration.scope}`);
+                        
+                        // Wait for it to activate if needed
+                        if (swRegistration.installing) {
+                            log('Service worker is installing, waiting for it to activate...');
+                            await new Promise(resolve => {
+                                const listener = (event) => {
+                                    if (swRegistration.active) {
+                                        swRegistration.removeEventListener('statechange', listener);
+                                        resolve();
+                                    }
+                                };
+                                swRegistration.installing.addEventListener('statechange', listener);
+                                setTimeout(resolve, 3000); // Timeout as a fallback
+                            });
+                        }
+                        
+                        // Force claim clients
+                        if (swRegistration.active) {
+                            log('Sending CLAIM_CLIENTS message to service worker');
+                            swRegistration.active.postMessage({type: 'CLAIM_CLIENTS'});
+                        }
+                    } catch (error) {
+                        log(`Error registering service worker: ${error.message}`);
+                        // Continue anyway to see if permission works
+                    }
+                }
+                
+                // Now request permission
+                const permission = await Notification.requestPermission();
+                log(`Permission result: ${permission}`);
+                
+                const permissionStatus = document.getElementById('permissionStatus');
+                if (permission === 'granted') {
+                    permissionStatus.textContent = 'Permission granted! You can proceed to Step 2.';
+                    permissionStatus.className = 'status success';
+                    
+                    // Enable FCM token button
+                    const getFCMTokenBtn = document.getElementById('getFCMTokenBtn');
+                    getFCMTokenBtn.disabled = false;
+                    getFCMTokenBtn.classList.remove('disabled');
+                    document.getElementById('tokenStatus').textContent = 'Ready to get FCM token.';
+                } else {
+                    permissionStatus.textContent = `Permission denied: ${permission}. Please allow notifications in your browser settings.`;
+                    permissionStatus.className = 'status error';
+                }
+            } catch (error) {
+                log(`Error requesting permission: ${error.message}`);
+                const permissionStatus = document.getElementById('permissionStatus');
+                permissionStatus.textContent = `Error requesting permission: ${error.message}`;
+                permissionStatus.className = 'status error';
+            }
+        });
+        
+        // Listen for incoming messages when the app is in foreground
+        if ('serviceWorker' in navigator) {
+            log('Registering service worker...');
+            navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                .then(registration => {
+                    log(`Service worker registered with scope: ${registration.scope}`);
+                    swRegistration = registration;
+                    
+                    // Check if service worker is active
+                    if (registration.active) {
+                        log('Service worker is already active');
+                        swIsActive = true;
+                    } else {
+                        // Listen for service worker state changes
+                        registration.addEventListener('statechange', event => {
+                            log(`Service worker state changed: ${registration.active ? 'active' : 'not active'}`);
+                            swIsActive = !!registration.active;
+                        });
+                    }
+                    
+                    if (firebaseInitialized) {
+                        messaging.onMessage(payload => {
+                            log(`Message received in foreground: ${JSON.stringify(payload)}`);
+                            const { title, body } = payload.notification;
+                            
+                            // Create a notification through the service worker
+                            registration.showNotification(title, {
+                                body: body,
+                                icon: '/favicon.ico',
+                                badge: '/favicon.ico'
+                            });
+                        });
+                    }
+                })
+                .catch(error => {
+                    log(`Service worker registration failed: ${error.message}`);
+                });
+        } else {
+            log('Service workers are not supported in this browser');
+        }
+        
+        // Get FCM token
+        document.getElementById('getFCMTokenBtn').addEventListener('click', async () => {
+            if (!firebaseInitialized) {
+                log('Firebase not initialized yet');
+                return;
+            }
+            
+            try {
+                log('Getting FCM token...');
+                document.getElementById('tokenStatus').textContent = 'Requesting token...';
+                document.getElementById('tokenStatus').className = 'status info';
+                
+                // Check and ensure the service worker is active
+                if (!swRegistration || !swRegistration.active) {
+                    log('Service worker not active, registering it first...');
+                    swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                    log(`Service worker registered with scope: ${swRegistration.scope}`);
+                    
+                    // Wait for activation if needed
+                    if (swRegistration.installing) {
+                        log('Waiting for service worker to activate...');
+                        await new Promise(resolve => {
+                            const listener = () => {
+                                if (swRegistration.active) {
+                                    swRegistration.installing.removeEventListener('statechange', listener);
+                                    resolve();
+                                }
+                            };
+                            swRegistration.installing.addEventListener('statechange', listener);
+                            setTimeout(resolve, 5000); // Safety timeout
+                        });
+                    }
+                }
+                
+                // Make sure controller is set
+                if (!navigator.serviceWorker.controller) {
+                    log('No controller, waiting for service worker to claim clients...');
+                    // Force the service worker to claim control
+                    if (swRegistration.active) {
+                        swRegistration.active.postMessage({type: 'CLAIM_CLIENTS'});
+                        // Wait a bit for the claim to take effect
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+                
+                // Print debug info about Firebase config
+                log('Using Firebase config:');
+                log(`- Project ID: ${firebaseConfig.projectId}`);
+                log(`- Sender ID: ${firebaseConfig.messagingSenderId}`);
+                log(`- VAPID key length: ${firebaseConfig.vapidKey?.length || 0} chars`);
+                
+                // Try a refreshed method for getting the token
+                log('Re-initializing messaging for token request...');
+                
+                // Delete existing token if any
+                try {
+                    await messaging.deleteToken();
+                    log('Previous token deleted');
+                } catch (err) {
+                    log(`Note: ${err.message}`); // Not fatal
+                }
+                
+                // Get a fresh token with explicit service worker
+                log('Requesting FCM token with service worker registration...');
+                fcmToken = await messaging.getToken({
+                    vapidKey: firebaseConfig.vapidKey,
+                    serviceWorkerRegistration: swRegistration
+                });
+                
+                if (!fcmToken) {
+                    throw new Error('No FCM token was returned');
+                }
+                
+                log(`FCM token obtained: ${fcmToken.substring(0, 10)}...`);
+                document.getElementById('fcmToken').textContent = fcmToken;
+                document.getElementById('tokenStatus').textContent = 'FCM token obtained successfully! You can proceed to Step 3.';
+                document.getElementById('tokenStatus').className = 'status success';
+                
+                // Enable test button
+                const sendTestBtn = document.getElementById('sendTestBtn');
+                sendTestBtn.disabled = false;
+                sendTestBtn.classList.remove('disabled');
+                document.getElementById('testStatus').textContent = 'Ready to send test notification.';
+            } catch (error) {
+                log(`Error getting FCM token: ${error.message}`);
+                
+                // Show detailed error info for troubleshooting
+                if (error.code) {
+                    log(`Error code: ${error.code}`);
+                }
+                if (error.stack) {
+                    log(`Stack trace: ${error.stack}`);
+                }
+                
+                document.getElementById('tokenStatus').textContent = `Error getting FCM token: ${error.message}`;
+                document.getElementById('tokenStatus').className = 'status error';
+                
+                // Add troubleshooting tips
+                log('Troubleshooting tips:');
+                log('1. Make sure you\'re using HTTPS or localhost');
+                log('2. Check if notifications are blocked in your browser settings');
+                log('3. Try using a different browser (Chrome works best)');
+                log('4. Check if you\'re logged in to a Google account in the browser');
+                log('5. Verify your Firebase project Cloud Messaging settings');
+                log('6. Try via the /fcm-debug page for more detailed diagnostics');
+            }
+        });
+        
+        // Send test notification
+        document.getElementById('sendTestBtn').addEventListener('click', async () => {
+            if (!fcmToken) {
+                log('No FCM token available');
+                return;
+            }
+            
+            try {
+                log('Sending test notification...');
+                document.getElementById('testStatus').textContent = 'Sending test notification...';
+                document.getElementById('testStatus').className = 'status info';
+                
+                const response = await fetch('/api/test-notification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: fcmToken })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    log(`Test notification sent successfully: ${JSON.stringify(result)}`);
+                    document.getElementById('testStatus').textContent = 'Test notification sent successfully! Check for the notification.';
+                    document.getElementById('testStatus').className = 'status success';
+                } else {
+                    log(`Error sending test notification: ${JSON.stringify(result)}`);
+                    document.getElementById('testStatus').textContent = `Error sending test notification: ${result.error}`;
+                    document.getElementById('testStatus').className = 'status error';
+                }
+            } catch (error) {
+                log(`Error sending test notification: ${error.message}`);
+                document.getElementById('testStatus').textContent = `Error sending test notification: ${error.message}`;
+                document.getElementById('testStatus').className = 'status error';
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -5,12 +5,109 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP8266 IoT Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-messaging-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
         body {
             padding-top: 20px;
             padding-bottom: 20px;
         }
+
+        /* Notification Styles */
+        .notification-container {
+            position: relative;
+            margin: 0 auto 20px auto;
+            width: 100%;
+            max-width: 100%;
+            pointer-events: auto;
+        }
+
+        .notification {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 10px;
+            padding: 15px;
+            display: flex;
+            align-items: flex-start;
+            animation: slideIn 0.5s ease-out;
+            border-left: 4px solid;
+            opacity: 1;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .notification.critical {
+            border-left-color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.1);
+        }
+
+        .notification.warning {
+            border-left-color: #ffc107;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+
+        .notification.error {
+            border-left-color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.1);
+        }
+
+        .notification-icon {
+            margin-right: 12px;
+            font-size: 20px;
+        }
+
+        .notification-content {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .notification-message {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .notification-close {
+            cursor: pointer;
+            font-size: 18px;
+            color: #999;
+            padding: 5px;
+        }
+
+        .notification-close:hover {
+            color: #666;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+        }
+
         .sensor-card {
             margin-bottom: 20px;
         }
@@ -59,10 +156,18 @@
             <div class="d-flex align-items-center">
                 <h1 class="display-5 fw-bold">ESP8266 IoT Dashboard</h1>
                 <div class="ms-auto">
+                    <button id="notification-btn" class="btn btn-primary me-2">
+                        <i class="bi bi-bell"></i> Activer les notifications
+                    </button>
+                    <button id="test-transmission-btn" class="btn btn-info me-2">
+                        <i class="bi bi-arrow-right-circle"></i> Test Firebase
+                    </button>
                     <span id="connection-status" class="badge bg-secondary">Connecting...</span>
                 </div>
             </div>
         </header>
+
+        <div class="notification-container" id="notificationContainer"></div>
 
         <div class="row mb-4">
             <div class="col-md-12">
@@ -115,12 +220,21 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Enable Firebase debug mode
+        localStorage.setItem('firebase:previous_websocket_failure', false);
+        localStorage.removeItem('firebase:host:dashbord-c3360-default-rtdb.firebaseio.com');
+        
         // Global variables
         let socket;
         let devices = {};
         let historyChart;
         let historyModal;
         let autoRefreshInterval;
+        let firebaseInitialized = false;
+        let firebaseApp = null;
+        let messaging = null;
+        let database = null;
+        let dataTransmissionStatus = 'disconnected'; // Status of data transmission
 
         // DOM elements
         const connectionStatus = document.getElementById('connection-status');
@@ -128,9 +242,20 @@
         const sensorDataContainer = document.getElementById('sensor-data-container');
         const refreshBtn = document.getElementById('refresh-btn');
         const autoRefreshCheckbox = document.getElementById('auto-refresh');
+        const notificationBtn = document.getElementById('notification-btn');
+        const testTransmissionBtn = document.getElementById('test-transmission-btn');
 
         // Initialize the dashboard
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('Initializing ESP8266 IoT Dashboard...');
+            
+            // Initialize Firebase first to ensure it's available for WebSocket data forwarding
+            firebaseInitialized = initializeFirebase();
+            console.log("Firebase initialization result:", firebaseInitialized);
+            
+            // Add Firebase monitoring tools in development mode
+            addFirebaseMonitor();
+            
             // Setup WebSocket connection
             setupWebSocket();
             
@@ -146,17 +271,215 @@
             
             // Setup modal
             historyModal = new bootstrap.Modal(document.getElementById('deviceHistoryModal'));
+
+            // Setup notification button
+            notificationBtn.addEventListener('click', () => {
+                // Redirect to main dashboard where notifications are handled
+                const mainDashboardUrl = 'https://industech-dashboard.web.app/notifications';
+                window.open(mainDashboardUrl, '_blank');
+            });
+            
+            // Create status indicator for Firebase transmission
+            createFirebaseStatusIndicator();
+            
+            // Setup test transmission button
+            testTransmissionBtn.addEventListener('click', testFirebaseTransmission);
+            
+            // Test notification to verify our UI works
+            setTimeout(() => {
+                showNotification(
+                    "Dashboard Initialisé",
+                    "La connexion entre WebSocket et Firebase est " + 
+                    (dataTransmissionStatus === 'connected' ? 'active' : 'en attente'),
+                    "info"
+                );
+            }, 2000);
         });
 
-        // Toggle auto-refresh
-        function toggleAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
+        // Create Firebase transmission status indicator
+        function createFirebaseStatusIndicator() {
+            const container = document.querySelector('.container header');
+            if (container) {
+                const statusDiv = document.createElement('div');
+                statusDiv.id = 'firebase-status';
+                statusDiv.className = 'badge bg-secondary ms-2';
+                statusDiv.textContent = 'Firebase: Initializing';
+                
+                const connectionStatusElement = document.getElementById('connection-status');
+                if (connectionStatusElement) {
+                    connectionStatusElement.parentNode.insertBefore(statusDiv, connectionStatusElement.nextSibling);
+                } else {
+                    container.querySelector('.ms-auto').appendChild(statusDiv);
+                }
+                
+                // Update status based on current state
+                updateFirebaseStatus(dataTransmissionStatus);
+            }
+        }
+        
+        // Update Firebase transmission status indicator
+        function updateFirebaseStatus(status) {
+            const statusElement = document.getElementById('firebase-status');
+            if (!statusElement) return;
+            
+            dataTransmissionStatus = status;
+            
+            switch(status) {
+                case 'connected':
+                    statusElement.textContent = 'Firebase: Connected';
+                    statusElement.className = 'badge bg-success ms-2';
+                    break;
+                case 'disconnected':
+                    statusElement.textContent = 'Firebase: Disconnected';
+                    statusElement.className = 'badge bg-danger ms-2';
+                    break;
+                case 'error':
+                    statusElement.textContent = 'Firebase: Error';
+                    statusElement.className = 'badge bg-warning ms-2';
+                    break;
+                case 'pending':
+                    statusElement.textContent = 'Firebase: Connecting...';
+                    statusElement.className = 'badge bg-info ms-2';
+                    break;
+                default:
+                    statusElement.textContent = 'Firebase: Unknown';
+                    statusElement.className = 'badge bg-secondary ms-2';
+            }
+        }
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA5cdGeJ8dyB9_RlO08qOSTUJDKmpm8LBw",
+            authDomain: "dashbord-c3360.firebaseapp.com",
+            projectId: "dashbord-c3360",
+            storageBucket: "dashbord-c3360.firebasestorage.app",
+            messagingSenderId: "240340486659",
+            appId: "1:240340486659:web:096a3dd141c3129e8c9c36",
+            measurementId: "G-8V808QB537",
+            databaseURL: "https://dashbord-c3360-default-rtdb.firebaseio.com"
+        };
+
+        // Initialize Firebase
+        function initializeFirebase() {
+            try {
+                if (!firebase) {
+                    console.error("Firebase library not loaded");
+                    updateFirebaseStatus('error');
+                    return false;
+                }
+                
+                // Update status to pending
+                updateFirebaseStatus('pending');
+                
+                // Initialize Firebase app
+                firebaseApp = firebase.initializeApp(firebaseConfig);
+                
+                // Check if messaging is available
+                if (firebase.messaging) {
+                    messaging = firebase.messaging();
+                    console.log("Firebase messaging initialized successfully");
+                } else {
+                    console.warn("Firebase messaging not available, will continue without notification support");
+                }
+                
+                // Initialize database
+                if (firebase.database) {
+                    database = firebase.database();
+                    console.log("Firebase database initialized successfully");
+                    
+                    // Setup connection status monitoring
+                    const connectedRef = database.ref(".info/connected");
+                    connectedRef.on("value", (snap) => {
+                        if (snap.val() === true) {
+                            console.log("Connected to Firebase database");
+                            updateFirebaseStatus('connected');
+                            
+                            // Send a connectivity event to the IndusTech dashboard
+                            sendToFirebase('connectivity', {
+                                device: 'ESP8266_Dashboard',
+                                status: 'connected',
+                                timestamp: Date.now()
+                            });
+                        } else {
+                            console.log("Disconnected from Firebase database");
+                            updateFirebaseStatus('disconnected');
+                        }
+                    });
+                    
+                    // Return true as database is initialized
+                    return true;
+                } else {
+                    console.error("Firebase database not available");
+                    updateFirebaseStatus('error');
+                    return false;
+                }
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                updateFirebaseStatus('error');
+                return false;
+            }
+        }
+
+        // Send data to Firebase
+        function sendToFirebase(path, data) {
+            if (!database) {
+                console.error("Firebase database not initialized, cannot send data");
+                return Promise.reject(new Error("Firebase database not initialized"));
             }
             
-            if (autoRefreshCheckbox.checked) {
-                autoRefreshInterval = setInterval(fetchDevices, 30000); // Refresh every 30 seconds
+            try {
+                // Add timestamp if not present
+                if (!data.timestamp) {
+                    data.timestamp = Date.now();
+                }
+                
+                // Add source if not present
+                if (!data.source) {
+                    data.source = 'ESP8266_Dashboard';
+                }
+                
+                // Log data being sent in debug mode
+                console.debug(`Sending data to Firebase path: ${path}`, data);
+                
+                // Send to Firebase
+                const ref = database.ref(path);
+                console.log(`[Firebase] Trying to write to ${path}`, ref.toString());
+                
+                return ref.push(data)
+                    .then(() => {
+                        console.log(`✅ [Firebase] Data successfully sent to path: ${path}`);
+                        // Try to read it back to confirm
+                        return ref.limitToLast(1).once('value')
+                            .then(snapshot => {
+                                const readData = snapshot.val();
+                                console.log(`[Firebase] Read back data from ${path}:`, readData);
+                                return true;
+                            })
+                            .catch(readError => {
+                                console.warn(`[Firebase] Could not read back data: ${readError.message}`);
+                                return true; // Still return success for the write
+                            });
+                    })
+                    .catch(error => {
+                        console.error(`❌ [Firebase] Error sending data to path ${path}:`, error);
+                        
+                        // Check if this is a permission error
+                        if (error.code === 'PERMISSION_DENIED') {
+                            console.error('[Firebase] PERMISSION DENIED. Check your Firebase rules!');
+                            showNotification(
+                                "Firebase Permission Error",
+                                `Cannot write to ${path}. Check your Firebase security rules.`,
+                                "error"
+                            );
+                        }
+                        
+                        updateFirebaseStatus('error');
+                        return false;
+                    });
+            } catch (error) {
+                console.error("[Firebase] Error in sendToFirebase:", error);
+                updateFirebaseStatus('error');
+                return Promise.reject(error);
             }
         }
 
@@ -174,6 +497,15 @@
                 connectionStatus.textContent = 'Connected';
                 connectionStatus.className = 'badge bg-success';
                 console.log('Connected to WebSocket server');
+                
+                // Send connection event to Firebase
+                if (firebaseInitialized) {
+                    sendToFirebase('events', {
+                        type: 'connection',
+                        status: 'connected',
+                        timestamp: Date.now()
+                    });
+                }
             });
             
             // Listen for messages
@@ -182,14 +514,21 @@
                     const data = JSON.parse(event.data);
                     console.log('Received WebSocket message:', data);
                     
-                    // Handle different message types
+                    // Forward data to Firebase based on type
+                    if (firebaseInitialized) {
+                        forwardWebSocketDataToFirebase(data);
+                    }
+                    
+                    // Handle different message types locally
                     if (data.type === 'sensor_data') {
                         updateSensorData(data.data);
                     } else if (data.type === 'connection') {
                         console.log('Connection message:', data.message);
+                    } else if (data.type === 'critical_state') {
+                        handleCriticalState(data);
                     }
                 } catch (error) {
-                    console.error('Error parsing message:', error);
+                    console.error('Error parsing WebSocket message:', error);
                 }
             });
             
@@ -198,6 +537,15 @@
                 connectionStatus.textContent = 'Disconnected';
                 connectionStatus.className = 'badge bg-danger';
                 console.log('Disconnected from WebSocket server');
+                
+                // Send disconnection event to Firebase
+                if (firebaseInitialized) {
+                    sendToFirebase('events', {
+                        type: 'connection',
+                        status: 'disconnected',
+                        timestamp: Date.now()
+                    });
+                }
                 
                 // Try to reconnect after 5 seconds
                 setTimeout(setupWebSocket, 5000);
@@ -208,7 +556,118 @@
                 connectionStatus.textContent = 'Error';
                 connectionStatus.className = 'badge bg-warning';
                 console.error('WebSocket error:', event);
+                
+                // Send error event to Firebase
+                if (firebaseInitialized) {
+                    sendToFirebase('events', {
+                        type: 'connection',
+                        status: 'error',
+                        timestamp: Date.now()
+                    });
+                }
             });
+        }
+        
+        // Forward WebSocket data to Firebase
+        function forwardWebSocketDataToFirebase(data) {
+            try {
+                // Different handling based on message type
+                switch(data.type) {
+                    case 'sensor_data':
+                        // Send sensor data to Firebase sensor_data path
+                        sendToFirebase('sensor_data', {
+                            ...data.data,
+                            received_at: Date.now()
+                        });
+                        break;
+                        
+                    case 'critical_state':
+                        // Send critical state to notifications
+                        sendToFirebase('notifications', {
+                            title: 'État Critique Détecté',
+                            message: data.message || `L'appareil ${data.device} est en état critique`,
+                            type: 'critical',
+                            read: false,
+                            device: data.device
+                        });
+                        break;
+                        
+                    case 'device_status':
+                        // Send device status changes
+                        sendToFirebase('device_status', {
+                            ...data,
+                            timestamp: Date.now()
+                        });
+                        break;
+                        
+                    default:
+                        // For all other types, send to events collection
+                        sendToFirebase('events', {
+                            ...data,
+                            timestamp: Date.now()
+                        });
+                }
+                
+                return true;
+            } catch (error) {
+                console.error("Error forwarding WebSocket data to Firebase:", error);
+                return false;
+            }
+        }
+
+        // Send notification to main dashboard through Firebase
+        function sendNotificationToMainDashboard(title, message, type = 'info') {
+            return sendToFirebase('notifications', {
+                title,
+                message,
+                type,
+                read: false,
+                timestamp: Date.now()
+            });
+        }
+
+        // Handle critical state messages - send to main dashboard
+        function handleCriticalState(data) {
+            // Send notification to main dashboard
+            sendNotificationToMainDashboard(
+                'État Critique Détecté',
+                data.message || `L'appareil ${data.device} est en état critique`,
+                'critical'
+            );
+
+            // Update UI to show critical state in this dashboard
+            const deviceCard = document.getElementById(`sensor-card-${data.device}`);
+            if (deviceCard) {
+                // Add visual indicator
+                const criticalIndicator = deviceCard.querySelector('.critical-indicator') || document.createElement('div');
+                criticalIndicator.className = 'badge bg-danger critical-indicator';
+                criticalIndicator.textContent = 'CRITIQUE';
+                
+                // Add to card header if not already present
+                const cardHeader = deviceCard.querySelector('.card-header');
+                if (cardHeader && !cardHeader.querySelector('.critical-indicator')) {
+                    cardHeader.appendChild(criticalIndicator);
+                }
+            }
+            
+            // Also show a local notification
+            showNotification(
+                'État Critique Détecté', 
+                data.message || `L'appareil ${data.device} est en état critique`, 
+                'critical'
+            );
+        }
+
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            
+            if (autoRefreshCheckbox.checked) {
+                autoRefreshInterval = setInterval(fetchDevices, 30000); // Refresh every 30 seconds
+            }
         }
 
         // Fetch devices from API
@@ -330,6 +789,7 @@
                             <div class="card-header">
                                 <h5 class="mb-0">${deviceInfo.name}</h5>
                                 <span class="badge bg-info">${new Date(data.receivedAt || new Date()).toLocaleTimeString()}</span>
+                                <span id="critical-state-${deviceId}" class="badge bg-danger ${data.isCritical ? '' : 'd-none'}">CRITIQUE</span>
                             </div>
                             <div class="card-body" id="sensor-body-${deviceId}">
                                 Loading sensor data...
@@ -600,6 +1060,464 @@
             if (i === 0) return bytes + ' ' + sizes[i];
             
             return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        // Notification system - consolidated into a single implementation
+        function showNotification(title, message, type = 'info') {
+            console.log('Showing notification:', { title, message, type });
+            
+            try {
+                // Get or create notification container
+                let container = document.getElementById('notificationContainer');
+                
+                if (!container) {
+                    console.log('Creating new notification container');
+                    const newContainer = document.createElement('div');
+                    newContainer.id = 'notificationContainer';
+                    newContainer.className = 'notification-container';
+                    document.body.insertBefore(newContainer, document.body.firstChild);
+                    container = newContainer;
+                }
+
+                // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+                
+                // Get appropriate icon
+                let icon = 'ℹ️';
+                if (type === 'critical' || type === 'error') {
+                    icon = '⚠️';
+                } else if (type === 'warning') {
+                    icon = '⚠️';
+                }
+            
+            // Create notification content
+            notification.innerHTML = `
+                <div class="notification-icon">
+                        ${icon}
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">${title}</div>
+                    <div class="notification-message">${message}</div>
+                </div>
+                <div class="notification-close">✕</div>
+            `;
+
+            // Add close button functionality
+                const closeButton = notification.querySelector('.notification-close');
+                if (closeButton) {
+                    closeButton.addEventListener('click', () => {
+                        removeNotification(notification);
+                    });
+                }
+
+            // Add to container
+            container.appendChild(notification);
+
+                // Force a reflow to ensure the animation plays
+                notification.offsetHeight;
+
+                // Auto-remove after 5 seconds
+            setTimeout(() => {
+                    removeNotification(notification);
+                }, 5000);
+                
+                // Play sound for critical notifications
+                if (type === 'critical' || type === 'error') {
+                    playNotificationSound();
+                }
+                
+                return notification;
+            } catch (error) {
+                console.error('Error showing notification:', error);
+                // Fallback to alert for critical notifications if everything else fails
+                if (type === 'critical' || type === 'error') {
+                    try {
+                        alert(`${title}\n\n${message}`);
+                    } catch (e) {
+                        console.error('Even alert failed:', e);
+                    }
+                }
+            }
+        }
+        
+        // Helper to remove notification with animation
+        function removeNotification(notification) {
+            if (!notification || !notification.parentNode) return;
+            
+            // Add animation class
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateY(-20px)';
+            
+            // Remove after animation completes
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
+        
+        // Play notification sound
+        function playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZRA0PVqzn77BdGAg+ltryxnMpBSl+zPLaizsIGGS57OihUBELTKXh8bllHgU2jdXzzn0vBSF1xe/glEILElyx6OyrWBUIQ5zd8sFuJAUuhM/z1YU2Bhxqvu7mnEYODlOq5O+zYBoGPJPY88p2KwUme8rx3I4+CRZiturqpVITC0mi4PK8aB8GM4nU8tGAMQYfcsLu45ZFDBFYr+ftrVoXCECY3PLEcSYELIHO8diJOQgZaLvt559NEAxPqOPwtmMcBjiP1/PMeS0GI3fH8N2RQAoUXrTp66hVFApGnt/yvmwhBTCG0fPTgjQGHW/A7eSaRQ0PVqzl77BeGQc9ltvyxnUoBSh+zPDaizsIGGS56+mjTxELTKXh8bllHgU1jdT0z3wvBSJ0xe/glEILElyx6OyrWRUIRJve8sFuJAUug8/z1YU2BRxqvu3mnEYODlOq5O+zYRsGPJLZ88p3KgUme8rx3I4+CRVht+rqpVMSC0mh4fK8aiAFM4nU8tGAMQYfccPu45ZFDBFYr+ftrVwWCECY3PLEcSYGK4DN8tiIOQgZZ7zs56BODwxPp+PxtmQcBjiP1/PMeS0FI3fH8N+RQAoUXrTp66hWEwlGnt/yv2wiBDCG0PPTgzUGHG3A7uSaSw0PVqzl77BeGQc9ltv0xnUoBSh9y/HajDsIF2W56+mjUREKTKPi8blnHgU1jdTy0HwvBSJ0xe/glEQKElux6eyrWRUJQ5vd88FwJAQug8/z1YY2BRxqvu3mnEYODlKp5e+zYRsGOpPY88p3KgUmecnw3Y4/CBVht+rqpVMSC0mh4fK+aiAFM4nS89GBMgUfccLv45dGCxFYrufur1sYB0CX3fLEcycFK4DN8tiKOQgZZ7vt56BODwxPp+Lxt2QdBTeP1/PMey4FI3bH8d+RQQsUXbPq66hWEwlGnt/yv2wiBDCG0PPTgzUGHG3A7uSaSw0PVKzm77BeGQc9ltvyxnUqBSh9y/HajDwIF2S56+mjUREKTKPi8blnHwU1jdTy0H4wBSF0xe/glEQKElux6eyrWRUJQ5vd88FwJAUtg8/z1YY3BRxqvu3mnEYODlKp5e+zYRsGOpHZ88p3LAUlecnw3Y8/CBVht+rqpVMSC0mh4PK+aiAFMojT89GBMgUfccLv45dGDhFYrufur1sYB0CX3fLEcycFKw==');
+                audio.volume = 0.5; // Lower volume to be less intrusive
+                audio.play().catch(e => {
+                    console.log('Audio play failed, trying alternate method:', e);
+                    // Try alternate play method
+                    setTimeout(() => {
+                        audio.play().catch(err => console.log('Second play attempt failed:', err));
+                    }, 100);
+                });
+            }
+            catch (e) {
+                console.log('Error creating audio element:', e);
+            }
+        }
+
+        // Setup test transmission button
+        function testFirebaseTransmission() {
+            // Check if Firebase is initialized
+            if (!firebaseInitialized || !database) {
+                console.error("Firebase Error: Firebase is not initialized. Cannot transmit test data.");
+                showNotification(
+                    "Firebase Error",
+                    "Firebase is not initialized. Cannot transmit test data.",
+                    "error"
+                );
+                return;
+            }
+            
+            console.log('Testing Firebase data transmission...', 'Database URL:', firebaseConfig.databaseURL);
+            
+            // Create sample test data
+            const testData = {
+                timestamp: Date.now(),
+                source: 'ESP8266_Dashboard_TestButton',
+                test_id: `test_${Date.now()}`,
+                sensors: {
+                    temperature: Math.round(Math.random() * 35 + 15), // 15-50°C
+                    humidity: Math.round(Math.random() * 80 + 20),    // 20-100%
+                    vibration: Math.round(Math.random() * 100),       // 0-100%
+                    light: Math.round(Math.random() * 100)            // 0-100%
+                },
+                system: {
+                    uptime: Math.round(Math.random() * 86400),        // 0-24h in seconds
+                    freeHeap: Math.round(Math.random() * 40000 + 10000), // Memory in bytes
+                    rssi: Math.round(Math.random() * 30 - 90)         // Signal strength -60 to -90 dBm
+                }
+            };
+            
+            // Mark as critical if temperature is high
+            if (testData.sensors.temperature > 35) {
+                testData.isCritical = true;
+                
+                // Also send a critical state notification
+                sendToFirebase('notifications', {
+                    title: 'Test Critical State',
+                    message: `Temperature reading of ${testData.sensors.temperature}°C exceeds threshold`,
+                    type: 'critical',
+                    device: 'TestDevice',
+                    read: false,
+                    timestamp: Date.now()
+                });
+            }
+            
+            console.log('About to send test data to Firebase...', 'Is database initialized?', !!database);
+            
+            try {
+                // Test direct Firebase write to verify database connection
+                const testRef = database.ref('test_connection');
+                testRef.set({
+                    timestamp: Date.now(),
+                    message: "Test connection successful"
+                })
+                .then(() => {
+                    console.log('✅ Direct Firebase test connection successful!');
+                })
+                .catch(error => {
+                    console.error('❌ Direct Firebase test failed:', error);
+                    
+                    // Check if error is due to permissions
+                    if (error.code === 'PERMISSION_DENIED') {
+                    showNotification(
+                            "Firebase Permission Error",
+                            "You don't have permission to write to the database. Check your Firebase rules.",
+                            "error"
+                        );
+                    }
+                });
+                
+                // Send data to different Firebase paths
+                const promises = [
+                    // Send to sensor data
+                    sendToFirebase('sensor_data', testData),
+                    
+                    // Send to events
+                    sendToFirebase('events', {
+                        type: 'test_event',
+                        source: 'ESP8266_Dashboard_TestButton',
+                        message: 'Manual test transmission initiated by user',
+                        timestamp: Date.now()
+                    }),
+                    
+                    // Send to device status
+                    sendToFirebase('device_status', {
+                        device: 'TestDevice',
+                        status: 'online',
+                        lastSeen: Date.now(),
+                        battery: Math.round(Math.random() * 100),
+                        timestamp: Date.now()
+                    })
+                ];
+                
+                // Show notification
+                    showNotification(
+                    "Test Data Transmitted",
+                    "Sample data has been sent to Firebase. Check the IndusTech dashboard for updates.",
+                    "info"
+                );
+                
+                // Log the sent data
+                console.log('Test data sent to Firebase:', testData);
+            } catch (error) {
+                console.error('Error in testFirebaseTransmission:', error);
+                    showNotification(
+                    "Firebase Error",
+                    "Error transmitting test data: " + error.message,
+                    "error"
+                );
+            }
+        }
+
+        // Add Firebase monitoring panel
+        function addFirebaseMonitor() {
+            console.log("Setting up Firebase monitor");
+            
+            // Create monitor container
+            const monitorContainer = document.createElement('div');
+            monitorContainer.id = 'firebase-monitor';
+            monitorContainer.style.cssText = `
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                width: 300px;
+                max-height: 300px;
+                background: #f8f9fa;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                overflow-y: auto;
+                z-index: 1000;
+                font-size: 12px;
+                display: none;
+            `;
+            
+            // Create header
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 5px;
+            `;
+            
+            const title = document.createElement('h6');
+            title.style.margin = '0';
+            title.textContent = 'Firebase Monitor';
+            
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'btn btn-sm btn-outline-secondary';
+            toggleBtn.textContent = 'Close';
+            toggleBtn.style.padding = '0 5px';
+            toggleBtn.style.fontSize = '11px';
+            
+            header.appendChild(title);
+            header.appendChild(toggleBtn);
+            
+            // Create content container
+            const content = document.createElement('div');
+            content.id = 'firebase-monitor-content';
+            
+            // Show initial status
+            const statusLine = document.createElement('div');
+            statusLine.innerHTML = `<strong>URL:</strong> ${firebaseConfig.databaseURL}`;
+            content.appendChild(statusLine);
+            
+            const initLine = document.createElement('div');
+            initLine.innerHTML = `<strong>Status:</strong> ${firebaseInitialized ? 'Initialized ✅' : 'Failed ❌'}`;
+            content.appendChild(initLine);
+            
+            // Create log container
+            const logContainer = document.createElement('div');
+            logContainer.id = 'firebase-monitor-logs';
+            logContainer.style.cssText = `
+                margin-top: 8px;
+                border-top: 1px solid #eee;
+                padding-top: 5px;
+                max-height: 200px;
+                overflow-y: auto;
+            `;
+            
+            // Add controls
+            const controls = document.createElement('div');
+            controls.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                margin-top: 8px;
+                border-top: 1px solid #eee;
+                padding-top: 5px;
+            `;
+            
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'btn btn-sm btn-outline-danger';
+            clearBtn.textContent = 'Clear Logs';
+            clearBtn.style.padding = '0 5px';
+            clearBtn.style.fontSize = '11px';
+            
+            const testBtn = document.createElement('button');
+            testBtn.className = 'btn btn-sm btn-outline-primary';
+            testBtn.textContent = 'Test Connection';
+            testBtn.style.padding = '0 5px';
+            testBtn.style.fontSize = '11px';
+            
+            controls.appendChild(clearBtn);
+            controls.appendChild(testBtn);
+            
+            // Assemble the monitor
+            monitorContainer.appendChild(header);
+            monitorContainer.appendChild(content);
+            monitorContainer.appendChild(logContainer);
+            monitorContainer.appendChild(controls);
+            
+            // Add floating button to toggle monitor
+            const floatingBtn = document.createElement('button');
+            floatingBtn.id = 'firebase-monitor-toggle';
+            floatingBtn.className = 'btn btn-sm btn-info';
+            floatingBtn.innerHTML = '<i class="bi bi-database"></i> Firebase';
+            floatingBtn.style.cssText = `
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                z-index: 1000;
+            `;
+            
+            // Add everything to the body
+            document.body.appendChild(monitorContainer);
+            document.body.appendChild(floatingBtn);
+            
+            // Setup event listeners
+            floatingBtn.addEventListener('click', () => {
+                monitorContainer.style.display = 'block';
+                floatingBtn.style.display = 'none';
+            });
+            
+            toggleBtn.addEventListener('click', () => {
+                monitorContainer.style.display = 'none';
+                floatingBtn.style.display = 'block';
+            });
+            
+            clearBtn.addEventListener('click', () => {
+                const logsContainer = document.getElementById('firebase-monitor-logs');
+                if (logsContainer) logsContainer.innerHTML = '';
+            });
+            
+            testBtn.addEventListener('click', () => {
+                addFirebaseLog('Testing connection...');
+                if (database) {
+                    database.ref('.info/connected').once('value')
+                        .then(snapshot => {
+                            const connected = snapshot.val();
+                            addFirebaseLog(`Connection test: ${connected ? 'Connected ✅' : 'Disconnected ❌'}`);
+                            
+                            // Try a timestamp test
+                            return database.ref('.info/serverTimeOffset').once('value');
+                        })
+                        .then(snapshot => {
+                            const offset = snapshot.val();
+                            const serverTime = new Date(Date.now() + offset);
+                            addFirebaseLog(`Server time: ${serverTime.toLocaleString()} (offset: ${offset}ms)`);
+                            
+                            // Try a test write
+                            return database.ref('test_monitor').set({
+                                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                                client: navigator.userAgent.substring(0, 50)
+                            });
+                        })
+                        .then(() => {
+                            addFirebaseLog('Test write successful ✅');
+                        })
+                        .catch(error => {
+                            addFirebaseLog(`Error: ${error.message} ❌`, 'error');
+                        });
+                } else {
+                    addFirebaseLog('Firebase database not initialized ❌', 'error');
+                }
+            });
+            
+            // Override console methods to capture Firebase logs
+            const originalConsoleLog = console.log;
+            const originalConsoleError = console.error;
+            const originalConsoleWarn = console.warn;
+            
+            console.log = function() {
+                originalConsoleLog.apply(console, arguments);
+                const args = Array.from(arguments);
+                const message = args.join(' ');
+                if (message.includes('Firebase') || message.includes('firebase')) {
+                    addFirebaseLog(message);
+                }
+            };
+            
+            console.error = function() {
+                originalConsoleError.apply(console, arguments);
+                const args = Array.from(arguments);
+                const message = args.join(' ');
+                if (message.includes('Firebase') || message.includes('firebase')) {
+                    addFirebaseLog(message, 'error');
+                }
+            };
+            
+            console.warn = function() {
+                originalConsoleWarn.apply(console, arguments);
+                const args = Array.from(arguments);
+                const message = args.join(' ');
+                if (message.includes('Firebase') || message.includes('firebase')) {
+                    addFirebaseLog(message, 'warning');
+                }
+            };
+        }
+        
+        // Add log to Firebase monitor
+        function addFirebaseLog(message, type = 'info') {
+            const logsContainer = document.getElementById('firebase-monitor-logs');
+            if (!logsContainer) return;
+            
+            const logEntry = document.createElement('div');
+            logEntry.style.cssText = `
+                margin-bottom: 4px;
+                font-size: 11px;
+                border-bottom: 1px solid #f5f5f5;
+                padding-bottom: 2px;
+            `;
+            
+            // Set color based on type
+            if (type === 'error') {
+                logEntry.style.color = '#dc3545';
+            } else if (type === 'warning') {
+                logEntry.style.color = '#ffc107';
+            } else {
+                logEntry.style.color = '#333';
+            }
+            
+            // Add timestamp
+            const time = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `<small>${time}</small> ${message}`;
+            
+            // Add to container and scroll to bottom
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
         }
     </script>
 </body>

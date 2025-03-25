@@ -242,6 +242,18 @@
     
     <div id="messageContainer"></div>
     
+    <!-- Add critical state simulation controls -->
+    <div class="critical-simulation">
+        <h4>Simulation d'état critique</h4>
+        
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="simulate-critical">
+            <label class="form-check-label" for="simulate-critical">
+                Simuler un état critique
+            </label>
+        </div>
+    </div>
+    
     <script>
         // Global variables
         const devices = new Map();
@@ -349,7 +361,8 @@
                     uptime: 0,
                     freeHeap: 40000,
                     rssi: -65
-                }
+                },
+                simulateCritical: false
             };
             
             // Store device
@@ -829,6 +842,27 @@
                 addMessage(`API Error - GET /api/devices/${selectedDeviceId}/history: ${error.message}`, 'error');
             }
         }
+        
+        // Handle critical simulation checkbox
+        const criticalCheckbox = document.getElementById('simulate-critical');
+        criticalCheckbox.addEventListener('change', () => {
+            device.simulateCritical = criticalCheckbox.checked;
+            
+            if (device.simulateCritical) {
+                // Set all sensors to critical values
+                device.sensors.temperature = CRITICAL_TEMP + 5;
+                device.sensors.vibration = 1;
+                device.sensors.light = CRITICAL_LIGHT - 5;
+            } else {
+                // Reset to normal values
+                device.sensors.temperature = 25.0;
+                device.sensors.vibration = 0;
+                device.sensors.light = 50;
+            }
+            
+            // Update sliders and toggles
+            updateSensorControls();
+        });
     </script>
 </body>
 </html> 

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Registration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .info {
+            background-color: #d9edf7;
+            color: #31708f;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+            margin-top: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        a {
+            color: #337ab7;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Service Worker Registration</h1>
+    <p>This page registers the Firebase Messaging Service Worker for push notifications.</p>
+    
+    <div id="registrationStatus" class="status info">Checking service worker support...</div>
+    
+    <button id="registerBtn">Register Service Worker</button>
+    <button id="unregisterBtn" disabled>Unregister Service Worker</button>
+    <button id="continueBtn" disabled>Continue to Notification Test</button>
+    
+    <h2>Console Log</h2>
+    <pre id="consoleLog"></pre>
+    
+    <script>
+        // Log function
+        function log(message) {
+            const consoleLog = document.getElementById('consoleLog');
+            const timestamp = new Date().toLocaleTimeString();
+            consoleLog.textContent = `[${timestamp}] ${message}\n` + consoleLog.textContent;
+        }
+        
+        // Update registration status
+        function updateStatus(message, type) {
+            const statusElement = document.getElementById('registrationStatus');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+        
+        // Check if service workers are supported
+        if ('serviceWorker' in navigator) {
+            log('Service Worker is supported in this browser');
+            updateStatus('Service Worker is supported. Click "Register Service Worker" to proceed.', 'info');
+            document.getElementById('registerBtn').disabled = false;
+        } else {
+            log('Service Worker is NOT supported in this browser');
+            updateStatus('Service Worker is NOT supported in this browser. Push notifications will not work.', 'error');
+            document.getElementById('registerBtn').disabled = true;
+        }
+        
+        // Check for existing registrations
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                if (registrations.length > 0) {
+                    log(`Found ${registrations.length} existing service worker registrations`);
+                    registrations.forEach((registration, i) => {
+                        log(`Registration ${i+1}: scope = ${registration.scope}`);
+                    });
+                    
+                    const firebaseSW = registrations.find(r => r.scope.includes(window.location.origin));
+                    if (firebaseSW) {
+                        log('Firebase service worker is already registered');
+                        updateStatus('Firebase service worker is already registered. You can continue to the notification test.', 'success');
+                        document.getElementById('unregisterBtn').disabled = false;
+                        document.getElementById('continueBtn').disabled = false;
+                    }
+                } else {
+                    log('No existing service worker registrations found');
+                }
+            });
+        }
+        
+        // Register service worker
+        document.getElementById('registerBtn').addEventListener('click', async () => {
+            try {
+                log('Registering service worker...');
+                updateStatus('Registering service worker...', 'info');
+                
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                log(`Service worker registered successfully with scope: ${registration.scope}`);
+                
+                // Check if service worker is active
+                if (registration.active) {
+                    log('Service worker is already active');
+                    updateStatus('Service worker registered and active. You can continue to the notification test.', 'success');
+                } else if (registration.installing) {
+                    log('Service worker is installing...');
+                    updateStatus('Service worker is installing. Please wait...', 'info');
+                    
+                    registration.installing.addEventListener('statechange', e => {
+                        log(`Service worker state changed: ${e.target.state}`);
+                        if (e.target.state === 'activated') {
+                            updateStatus('Service worker is now activated. You can continue to the notification test.', 'success');
+                            document.getElementById('unregisterBtn').disabled = false;
+                            document.getElementById('continueBtn').disabled = false;
+                        }
+                    });
+                }
+                
+                document.getElementById('unregisterBtn').disabled = false;
+                document.getElementById('continueBtn').disabled = false;
+            } catch (error) {
+                log(`Error registering service worker: ${error.message}`);
+                updateStatus(`Error registering service worker: ${error.message}`, 'error');
+            }
+        });
+        
+        // Unregister service worker
+        document.getElementById('unregisterBtn').addEventListener('click', async () => {
+            try {
+                log('Unregistering service workers...');
+                updateStatus('Unregistering service workers...', 'info');
+                
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                
+                if (registrations.length === 0) {
+                    log('No service workers to unregister');
+                    updateStatus('No service workers found to unregister.', 'info');
+                    return;
+                }
+                
+                for (const registration of registrations) {
+                    const result = await registration.unregister();
+                    log(`Unregistered service worker with scope ${registration.scope}: ${result}`);
+                }
+                
+                updateStatus('All service workers unregistered. You may register again.', 'success');
+                document.getElementById('unregisterBtn').disabled = true;
+                document.getElementById('continueBtn').disabled = true;
+            } catch (error) {
+                log(`Error unregistering service workers: ${error.message}`);
+                updateStatus(`Error unregistering service workers: ${error.message}`, 'error');
+            }
+        });
+        
+        // Continue to notification test
+        document.getElementById('continueBtn').addEventListener('click', () => {
+            window.location.href = '/notification-test';
+        });
+    </script>
+</body>
+</html> 

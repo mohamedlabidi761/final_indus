@@ -8,7 +8,7 @@ const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 
 // WebSocket server details
-const char* websocket_server = "192.168.1.100"; // Replace with your server IP
+const char* websocket_server = "192.168.1.115"; // Replace with your server IP
 const uint16_t websocket_port = 3000;
 
 // Device information
@@ -21,6 +21,14 @@ const char* deviceType = "industrial"; // Type of device
 #define DHTTYPE DHT11    // DHT sensor type
 #define VIBRATION_PIN D2 // Vibration sensor pin
 #define LIGHT_PIN A0     // Light sensor analog pin
+
+// Define relay pin
+#define RELAY_PIN D1  // Pin connected to the relay
+
+// Define critical thresholds
+const float CRITICAL_TEMP = 40.0;  // Temperature threshold in °C
+const int CRITICAL_VIBRATION = 1;  // Vibration threshold (1 = detected)
+const int CRITICAL_LIGHT = 20;     // Light threshold in %
 
 // Initialize DHT sensor
 DHT dht(DHTPIN, DHTTYPE);
@@ -37,6 +45,7 @@ const unsigned long reconnectInterval = 5000; // Try to reconnect every 5 second
 // Connection status
 bool isRegistered = false;
 
+// Initialize relay pin
 void setup() {
   // Initialize serial communication
   Serial.begin(115200);
@@ -54,6 +63,10 @@ void setup() {
   
   // Setup WebSocket connection
   setupWebSocket();
+  
+  // Initialize relay pin
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);  // Start with relay off (HIGH state)
 }
 
 void loop() {
@@ -189,6 +202,35 @@ void registerDevice() {
   Serial.println("Sent registration request");
 }
 
+// Function to control machine based on sensor values
+void controlMachine(float temperature, int vibration, int light) {
+    bool shouldStop = false;
+    
+    // Check critical conditions
+    if (temperature >= CRITICAL_TEMP) {
+        Serial.println("Critical temperature detected!");
+        shouldStop = true;
+    }
+    
+    if (vibration >= CRITICAL_VIBRATION) {
+        Serial.println("Critical vibration detected!");
+        shouldStop = true;
+    }
+    
+    if (light <= CRITICAL_LIGHT) {
+        Serial.println("Critical light level detected!");
+        shouldStop = true;
+    }
+    
+    // Control relay
+    if (shouldStop) {
+        digitalWrite(RELAY_PIN, LOW);  // Turn on relay to stop machine
+        Serial.println("Machine stopped due to critical condition");
+    } else {
+        digitalWrite(RELAY_PIN, HIGH); // Turn off relay to allow machine operation
+    }
+}
+
 void sendSensorData() {
   if (!webSocket.isConnected() || !isRegistered) {
     return;
@@ -213,6 +255,9 @@ void sendSensorData() {
     humidity = -1;
     temperature = -1;
   }
+  
+  // Control machine based on sensor values
+  controlMachine(temperature, vibration, lightPercentage);
   
   // Create JSON document
   DynamicJsonDocument doc(512);
