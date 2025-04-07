@@ -34,8 +34,6 @@ const Layout = ({ children }) => {
         return 'Historique';
       case '/admin':
         return 'Administration';
-      case '/settings':
-        return 'Paramètres';
       default:
         return 'IndusTech';
     }

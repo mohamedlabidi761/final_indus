@@ -5,7 +5,6 @@ import MachineControl from './components/MachineControl/MachineControl';
 import History from './components/History/History';
 import Authentication from './components/Authentication/Authentication';
 import AdminManagement from './components/AdminManagement/AdminManagement';
-import Settings from './components/Settings/Settings';
 import Layout from './components/Layout/Layout';
 import { AppProvider } from './context/AppContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -40,11 +39,6 @@ function App() {
               <Route path="/admin" element={
                 <Layout>
                   <AdminManagement />
-                </Layout>
-              } />
-              <Route path="/settings" element={
-                <Layout>
-                  <Settings />
                 </Layout>
               } />
               <Route path="*" element={<Navigate to="/" replace />} />

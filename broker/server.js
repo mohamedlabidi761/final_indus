@@ -7,8 +7,8 @@ const path = require('path');
 const admin = require('firebase-admin');
 
 // Critical thresholds
-const CRITICAL_TEMP = 30;      // °C
-const CRITICAL_VIBRATION = 80; // %
+const CRITICAL_TEMP = 40;      // °C
+const CRITICAL_VIBRATION = 60; // %
 const CRITICAL_LIGHT = 20;     // %
 
 // Create express app

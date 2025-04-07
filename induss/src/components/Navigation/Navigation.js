@@ -191,15 +191,6 @@ const Navigation = () => {
               <BsPersonGear className="nav-icon" />
               <span className="nav-text">Gestion Admin</span>
             </Nav.Link>
-            <Nav.Link 
-              as={Link} 
-              to="/settings" 
-              className={`nav-link ${isActive('/settings') ? 'active' : ''}`}
-              onClick={closeNav}
-            >
-              <BsToggleOn className="nav-icon" />
-              <span className="nav-text">Paramètres</span>
-            </Nav.Link>
           </Nav>
         </div>
       </div>

@@ -1,44 +1,165 @@
-import React from 'react';
-import { Form, Button, Card } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Card, Form, Button, Container, Alert, Tab, Tabs } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../../context/AppContext';
 import './Authentication.css';
 
 const Authentication = () => {
-  const handleSubmit = (e) => {
+  const navigate = useNavigate();
+  const { login, register } = useAppContext();
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Login form state
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: ''
+  });
+
+  // Register form state
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+
+  // Handle login form submission
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Handle authentication
+    setError('');
+    setLoading(true);
+
+    try {
+      await login(loginData.email, loginData.password);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Failed to login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle register form submission
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    // Validate passwords match
+    if (registerData.password !== registerData.confirmPassword) {
+      return setError('Passwords do not match');
+    }
+
+    setLoading(true);
+
+    try {
+      await register(registerData.name, registerData.email, registerData.password);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="auth-container">
-      <Card className="auth-card shadow-lg">
+    <Container className="auth-container">
+      <Card className="auth-card">
         <Card.Body>
-          <h2 className="text-center mb-4">Connexion</h2>
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Nom d'utilisateur</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Entrez votre nom d'utilisateur"
-                required
-              />
-            </Form.Group>
+          <h1 className="text-center mb-4">IndusTech</h1>
+          
+          {error && <Alert variant="danger">{error}</Alert>}
+          
+          <Tabs defaultActiveKey="login" className="mb-4">
+            <Tab eventKey="login" title="Login">
+              <Form onSubmit={handleLogin}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    value={loginData.email}
+                    onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                    required
+                  />
+                </Form.Group>
 
-            <Form.Group className="mb-4">
-              <Form.Label>Mot de passe</Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Entrez votre mot de passe"
-                required
-              />
-            </Form.Group>
+                <Form.Group className="mb-4">
+                  <Form.Label>Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    value={loginData.password}
+                    onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                    required
+                  />
+                </Form.Group>
 
-            <Button variant="primary" type="submit" className="w-100">
-              Se connecter
-            </Button>
-          </Form>
+                <Button 
+                  variant="primary" 
+                  type="submit" 
+                  className="w-100" 
+                  disabled={loading}
+                >
+                  {loading ? 'Logging in...' : 'Login'}
+                </Button>
+              </Form>
+            </Tab>
+
+            <Tab eventKey="register" title="Register">
+              <Form onSubmit={handleRegister}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={registerData.name}
+                    onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-4">
+                  <Form.Label>Confirm Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    value={registerData.confirmPassword}
+                    onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+
+                <Button 
+                  variant="primary" 
+                  type="submit" 
+                  className="w-100" 
+                  disabled={loading}
+                >
+                  {loading ? 'Creating Account...' : 'Register'}
+                </Button>
+              </Form>
+            </Tab>
+          </Tabs>
         </Card.Body>
       </Card>
-    </div>
+    </Container>
   );
 };
 
